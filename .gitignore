@@ -1,4 +1,4 @@
-node_modules/
+﻿node_modules/
 dist/
 publish/
 .angular/
@@ -19,4 +19,4 @@ backend/ShadowingEnglish.Api/wwwroot/
 .vscode/
 local.properties
 
-app/
+/app/
