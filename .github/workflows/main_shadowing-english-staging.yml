@@ -1,7 +1,4 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
-
-name: Build and deploy ASP.Net Core app to Azure Web App - shadowing-english-staging
+﻿name: Build and deploy Shadowing English to Azure
 
 on:
   push:
@@ -9,45 +6,63 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: windows-latest
-    permissions:
-      contents: read #This is required for actions/checkout
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Set up .NET Core
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install Angular dependencies
+        run: npm ci
+
+      - name: Build Angular
+        run: npm run build
+
+      - name: Copy Angular build to ASP.NET wwwroot
+        shell: pwsh
+        run: |
+          $frontend = ".\dist\shadowing-demo\browser"
+          $wwwroot = ".\backend\ShadowingEnglish.Api\wwwroot"
+
+          if (-not (Test-Path "$frontend\index.html")) {
+            throw "Angular build index.html was not found."
+          }
+
+          New-Item -ItemType Directory -Force -Path $wwwroot | Out-Null
+          Remove-Item "$wwwroot\*" -Recurse -Force -ErrorAction SilentlyContinue
+          Copy-Item "$frontend\*" "$wwwroot" -Recurse -Force
+
+          if (-not (Test-Path "$wwwroot\index.html")) {
+            throw "Frontend copy to wwwroot failed."
+          }
+
+          $legacyProxy = Get-ChildItem $wwwroot -Recurse -File -Include *.js,*.html |
+            Select-String -Pattern "/__ai/" -SimpleMatch
+
+          if ($legacyProxy) {
+            throw "Legacy /__ai/ frontend proxy detected."
+          }
+
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.x'
+          dotnet-version: '10.0.x'
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+      - name: Publish ASP.NET Core
+        run: dotnet publish .\backend\ShadowingEnglish.Api\ShadowingEnglish.Api.csproj -c Release -o .\publish\azure
 
-      - name: dotnet publish
-        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
-
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
-
-  deploy:
-    runs-on: windows-latest
-    needs: build
-    permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: .net-app
-      
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -55,11 +70,9 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_E238A1B206974DEFBA9F2BADFB2A7D83 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_10F79E9CF7E44507BD368C3124007D48 }}
 
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
+      - name: Deploy to Azure
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'shadowing-english-staging'
           slot-name: 'Production'
-          package: .
-          
+          package: '.\publish\azure'
