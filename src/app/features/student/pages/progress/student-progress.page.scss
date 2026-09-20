@@ -1,0 +1,5 @@
+:host { display: block; }
+.student-panel__links { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.student-panel__links a { color: #00685f; font-size: 11px; font-weight: 900; text-decoration: none; }
+.student-panel__links a:hover { text-decoration: underline; }
+@media (max-width: 640px) { .student-panel__links { justify-content: flex-start; } }

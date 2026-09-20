@@ -1,0 +1,30 @@
+<app-page-header
+  title="Courses / Lessons"
+  description="Admin-level view of saved lessons. Later this becomes courses, weeks, days, and teacher ownership."
+></app-page-header>
+
+<section class="card">
+  <div class="table" *ngIf="lessons.length > 0">
+    <table>
+      <thead>
+        <tr>
+          <th>Lesson</th>
+          <th>Week</th>
+          <th>Day</th>
+          <th>Segments</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let lesson of lessons">
+          <td>{{ lesson.title }}</td>
+          <td>{{ lesson.weekName }}</td>
+          <td>{{ lesson.dayName }}</td>
+          <td>{{ lesson.segments.length }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="hint" *ngIf="lessons.length === 0">No lessons yet.</p>
+</section>

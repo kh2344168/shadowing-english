@@ -1,0 +1,4 @@
+Shadowing project complete merge - 2026-09-15
+Files: 309
+Included major areas: Angular frontend, ASP.NET backend, scripts, demo assets, docs
+Merged latest: speech-driven shadowing, mobile shadowing UI, vocabulary mobile animation, AI old-working fix

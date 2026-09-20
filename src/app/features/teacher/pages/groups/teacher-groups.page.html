@@ -1,0 +1,195 @@
+<section dir="rtl" class="min-h-screen bg-[#F8FAFC] text-[#111827]">
+  <div class="mx-auto w-full max-w-[1450px] px-4 py-5 sm:px-6 lg:px-8 lg:py-8">
+    <header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div>
+        <span class="mb-2 block text-xs font-black uppercase tracking-[0.18em] text-[#0F766E]">Groups</span>
+        <h1 class="m-0 text-3xl font-black tracking-[-0.04em] sm:text-4xl">المجموعات</h1>
+        <p class="mt-3 max-w-2xl text-sm font-bold leading-7 text-[#64748B]">
+          كل مجموعة مرتبطة بمنهج، ولها Group Curriculum خاصة بها وطلابها.
+        </p>
+      </div>
+
+      <button type="button" (click)="createOpen = true" class="inline-flex h-12 items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] px-5 text-sm font-black text-white shadow-[0_14px_28px_rgba(23,179,166,0.2)] transition hover:bg-[#0F766E]">
+        <fa-icon [icon]="icons.add"></fa-icon><span>إنشاء مجموعة</span>
+      </button>
+    </header>
+
+    <div *ngIf="groups.length === 0" class="rounded-[26px] border border-dashed border-[#BFE7E3] bg-white px-5 py-14 text-center text-sm font-bold text-[#64748B]">
+      لا توجد مجموعات. أنشئ أول مجموعة واختر لها Curriculum.
+    </div>
+
+    <section *ngIf="groups.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <article *ngFor="let group of groups" class="rounded-[24px] border bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)]" [ngClass]="selectedGroupId === group.id ? 'border-[#17B3A6]' : 'border-[#E2E8F0]'">
+        <div class="mb-4 flex items-start justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="grid h-12 w-12 place-items-center rounded-2xl bg-[#E6F6F4] text-lg text-[#0F766E]"><fa-icon [icon]="icons.groups"></fa-icon></div>
+            <div>
+              <h2 class="m-0 text-lg font-black">{{ group.name }}</h2>
+              <span class="mt-1 block text-xs font-bold text-[#64748B]">{{ group.curriculumName }}</span>
+            </div>
+          </div>
+          <span *ngIf="group.hasDraftChanges" class="rounded-full bg-[#FFF7E8] px-3 py-1 text-[11px] font-black text-[#B7791F]">Draft changes</span>
+          <span *ngIf="!group.hasDraftChanges" class="rounded-full bg-[#EEF8E9] px-3 py-1 text-[11px] font-black text-[#3F8D2B]">Published</span>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="rounded-2xl bg-[#F8FAFC] p-3">
+            <span class="flex items-center gap-2 text-[11px] font-black text-[#64748B]"><fa-icon [icon]="icons.students"></fa-icon>الطلاب</span>
+            <strong class="mt-1 block text-xl font-black">{{ group.studentIds.length }}</strong>
+          </div>
+          <div class="rounded-2xl bg-[#F8FAFC] p-3">
+            <span class="flex items-center gap-2 text-[11px] font-black text-[#64748B]"><fa-icon [icon]="icons.date"></fa-icon>تاريخ البداية</span>
+            <strong class="mt-1 block text-sm font-black">{{ group.startDate }}</strong>
+          </div>
+        </div>
+
+        <button type="button" (click)="openGroup(group.id)" class="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white">
+          <span>فتح المجموعة</span>
+        </button>
+      </article>
+    </section>
+
+    <section id="group-details" *ngIf="selectedGroup as group" class="mt-8 scroll-mt-5 rounded-[28px] border border-[#E2E8F0] bg-white p-4 shadow-[0_18px_48px_rgba(15,23,42,0.06)] sm:p-6">
+      <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <span class="text-xs font-black text-[#0F766E]">Group Details</span>
+          <h2 class="mt-1 text-2xl font-black">{{ group.name }}</h2>
+          <p class="mt-1 text-xs font-bold text-[#64748B]">{{ group.curriculumName }} · Start {{ group.startDate }}</p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button type="button" (click)="openCurriculumPicker('change')" class="h-10 rounded-xl border border-[#E2E8F0] bg-white px-4 text-xs font-black text-[#475569]">تغيير المنهج</button>
+          <button type="button" (click)="studentFormOpen = true; activeTab = 'students'" class="h-10 rounded-xl bg-[#17B3A6] px-4 text-xs font-black text-white">إضافة طالب</button>
+        </div>
+      </div>
+
+      <nav class="mb-5 grid grid-cols-3 rounded-2xl bg-[#F1F5F9] p-1">
+        <button type="button" (click)="setTab('overview')" class="h-11 rounded-xl text-xs font-black transition" [ngClass]="activeTab === 'overview' ? 'bg-white text-[#0F766E] shadow-sm' : 'text-[#64748B]'">نظرة عامة</button>
+        <button type="button" (click)="setTab('curriculum')" class="h-11 rounded-xl text-xs font-black transition" [ngClass]="activeTab === 'curriculum' ? 'bg-white text-[#0F766E] shadow-sm' : 'text-[#64748B]'">Group Curriculum</button>
+        <button type="button" (click)="setTab('students')" class="h-11 rounded-xl text-xs font-black transition" [ngClass]="activeTab === 'students' ? 'bg-white text-[#0F766E] shadow-sm' : 'text-[#64748B]'">الطلاب</button>
+      </nav>
+
+      <section *ngIf="activeTab === 'overview'" class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div class="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-5"><fa-icon class="text-[#0F766E]" [icon]="icons.groups"></fa-icon><span class="mt-4 block text-xs font-black text-[#64748B]">اسم المجموعة</span><strong class="mt-1 block text-lg font-black">{{ group.name }}</strong></div>
+        <div class="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-5"><fa-icon class="text-[#0F766E]" [icon]="icons.curriculum"></fa-icon><span class="mt-4 block text-xs font-black text-[#64748B]">المنهج المختار</span><strong class="mt-1 block text-lg font-black">{{ group.curriculumName }}</strong></div>
+        <div class="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-5"><fa-icon class="text-[#0F766E]" [icon]="icons.date"></fa-icon><span class="mt-4 block text-xs font-black text-[#64748B]">تاريخ البداية</span><strong class="mt-1 block text-lg font-black">{{ group.startDate }}</strong></div>
+        <div class="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-5"><fa-icon class="text-[#0F766E]" [icon]="icons.students"></fa-icon><span class="mt-4 block text-xs font-black text-[#64748B]">عدد الطلاب</span><strong class="mt-1 block text-lg font-black">{{ selectedGroupStudents.length }}</strong></div>
+      </section>
+
+      <section *ngIf="activeTab === 'curriculum'">
+        <div class="mb-5 rounded-[22px] border p-4 sm:p-5" [ngClass]="group.hasDraftChanges ? 'border-[#F5C66A] bg-[#FFF9EE]' : 'border-[#BFE7E3] bg-[#F1FBFA]'">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <strong class="block text-base font-black">{{ group.hasDraftChanges ? 'يوجد Draft غير منشور' : 'الـ Draft مطابق لآخر نسخة منشورة' }}</strong>
+              <span class="mt-1 block text-xs font-bold text-[#64748B]">الطلاب يشاهدون Published Version {{ group.publishedCurriculum.version }} فقط.</span>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" (click)="resetDraft()" [disabled]="!group.hasDraftChanges" class="inline-flex h-10 items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-4 text-xs font-black text-[#64748B] disabled:opacity-40"><fa-icon [icon]="icons.reset"></fa-icon><span>إلغاء Draft</span></button>
+              <button type="button" (click)="saveAsOpen = true" class="inline-flex h-10 items-center gap-2 rounded-xl border border-[#BFE7E3] bg-white px-4 text-xs font-black text-[#0F766E]"><fa-icon [icon]="icons.save"></fa-icon><span>حفظ كمنهج جديد</span></button>
+              <button type="button" (click)="publishChanges()" [disabled]="!group.hasDraftChanges || isPublishing" class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#17B3A6] px-4 text-xs font-black text-white disabled:opacity-40"><fa-icon [icon]="icons.publish"></fa-icon><span>{{ isPublishing ? 'Publishing...' : 'Publish Changes' }}</span></button>
+            </div>
+          </div>
+        </div>
+
+        <p *ngIf="savedCurriculumMessage" class="mb-4 rounded-2xl border border-[#BFE7E3] bg-[#F1FBFA] px-4 py-3 text-xs font-black text-[#0F766E]">{{ savedCurriculumMessage }}</p>
+
+        <div class="grid gap-4">
+          <article *ngFor="let week of group.draftCurriculum.weeks" class="overflow-hidden rounded-[22px] border border-[#E2E8F0] bg-white">
+            <button type="button" (click)="toggleWeek(week.id)" class="flex w-full items-center justify-between gap-4 px-4 py-4 text-right sm:px-5">
+              <span class="flex items-center gap-3"><fa-icon class="text-sm text-[#475569]" [icon]="isWeekOpen(week.id) ? icons.open : icons.closed"></fa-icon><strong class="text-lg font-black">{{ week.name }}</strong></span>
+              <span class="rounded-full bg-[#E6F6F4] px-3 py-1 text-[11px] font-black text-[#0F766E]">{{ week.days.length }} أيام</span>
+            </button>
+
+            <div class="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out" [ngClass]="isWeekOpen(week.id) ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'">
+              <div class="overflow-hidden"><div class="grid gap-3 border-t border-[#E2E8F0] bg-[#F8FAFC] p-3 sm:p-4">
+                <section *ngFor="let day of week.days" class="overflow-hidden rounded-[20px] border border-[#E2E8F0] bg-white">
+                  <button type="button" (click)="toggleDay(day.id)" class="flex w-full items-center justify-between gap-4 px-4 py-3 text-right">
+                    <span class="flex items-center gap-3"><fa-icon class="text-xs text-[#475569]" [icon]="isDayOpen(day.id) ? icons.open : icons.closed"></fa-icon><strong class="font-black">{{ day.name }}</strong></span>
+                    <span class="text-xs font-black text-[#64748B]">{{ day.lessonSlots.length }} دروس</span>
+                  </button>
+
+                  <div class="grid transition-[grid-template-rows,opacity] duration-300 ease-in-out" [ngClass]="isDayOpen(day.id) ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'">
+                    <div class="overflow-hidden"><div class="grid gap-3 border-t border-[#E2E8F0] p-3">
+                      <article *ngFor="let slot of day.lessonSlots" class="flex items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-[#FBFEFD] p-3">
+                        <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[#E6F6F4] text-[#0F766E]"><fa-icon [icon]="icons.curriculum"></fa-icon></div>
+                        <div class="min-w-0 flex-1" *ngIf="getLesson(slot) as lesson"><strong class="block truncate text-sm font-black">{{ lesson.title }}</strong><span class="mt-1 block text-[11px] font-bold text-[#64748B]">{{ slot.repetitionCount }} تكرار · {{ slot.required ? 'مطلوب' : 'اختياري' }}</span></div>
+                        <button type="button" (click)="openSlotActions(week, day, slot)" class="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#E2E8F0] bg-white text-[#64748B]"><fa-icon [icon]="icons.more"></fa-icon></button>
+                      </article>
+
+                      <button type="button" (click)="openLessonPicker(week, day)" class="flex h-11 items-center justify-center gap-2 rounded-2xl border border-dashed border-[#17B3A6] bg-[#F1FBFA] text-sm font-black text-[#0F766E]"><fa-icon [icon]="icons.add"></fa-icon><span>إضافة درس إلى Draft</span></button>
+                    </div></div>
+                  </div>
+                </section>
+              </div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section *ngIf="activeTab === 'students'" class="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <div class="rounded-[22px] border border-[#E2E8F0] bg-[#F8FAFC] p-4 sm:p-5">
+          <div class="mb-4 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Add Student</span><h3 class="mt-1 text-lg font-black">إضافة إلى {{ group.name }}</h3></div><fa-icon class="text-[#0F766E]" [icon]="icons.student"></fa-icon></div>
+          <label class="block"><span class="mb-2 block text-xs font-black text-[#64748B]">اسم الطالب</span><input type="text" [(ngModel)]="studentName" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm font-bold outline-none focus:border-[#17B3A6]" /></label>
+          <label class="mt-3 block"><span class="mb-2 block text-xs font-black text-[#64748B]">البريد الإلكتروني</span><input type="email" [(ngModel)]="studentEmail" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm font-bold outline-none focus:border-[#17B3A6]" /></label>
+          <button type="button" (click)="addStudentToCurrentGroup()" class="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white"><fa-icon [icon]="icons.add"></fa-icon><span>إضافة الطالب</span></button>
+          <p *ngIf="studentMessage" class="mt-3 rounded-xl bg-white px-3 py-3 text-xs font-black text-[#0F766E]">{{ studentMessage }}</p>
+        </div>
+
+        <div class="grid gap-3">
+          <article *ngFor="let student of selectedGroupStudents" class="flex items-center gap-3 rounded-[20px] border border-[#E2E8F0] bg-white p-4">
+            <div class="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#E6F6F4] font-black text-[#0F766E]">{{ student.name.charAt(0).toUpperCase() }}</div>
+            <div class="min-w-0 flex-1"><strong class="block truncate text-sm font-black">{{ student.name }}</strong><span class="mt-1 block truncate text-xs font-bold text-[#64748B]">{{ student.email }}</span></div>
+            <span class="rounded-full bg-[#F1FBFA] px-3 py-1 text-[11px] font-black text-[#0F766E]">{{ group.name }}</span>
+          </article>
+          <div *ngIf="selectedGroupStudents.length === 0" class="rounded-[20px] border border-dashed border-[#BFE7E3] bg-[#F8FEFD] px-4 py-10 text-center text-sm font-bold text-[#64748B]">لا يوجد طلاب داخل المجموعة بعد.</div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <div *ngIf="createOpen || curriculumPickerOpen || lessonPickerOpen || slotActionsOpen || saveAsOpen" class="fixed inset-0 z-[80] bg-[#0F172A]/45 backdrop-blur-[2px]"></div>
+
+  <aside *ngIf="createOpen" class="fixed inset-x-0 bottom-0 z-[90] max-h-[90vh] overflow-y-auto rounded-t-[30px] bg-white p-5 shadow-[0_-20px_60px_rgba(15,23,42,0.22)] sm:left-5 sm:right-auto sm:top-5 sm:bottom-auto sm:w-[430px] sm:rounded-[28px]">
+    <div class="mb-5 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Create Group</span><h2 class="mt-1 text-xl font-black">مجموعة جديدة</h2></div><button type="button" (click)="createOpen = false" class="grid h-10 w-10 place-items-center rounded-xl bg-[#F1F5F9] text-[#64748B]"><fa-icon [icon]="icons.close"></fa-icon></button></div>
+    <label class="block"><span class="mb-2 block text-xs font-black text-[#64748B]">اسم المجموعة</span><input type="text" [(ngModel)]="newGroupName" class="h-12 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 text-sm font-bold outline-none focus:border-[#17B3A6]" /></label>
+    <label class="mt-4 block"><span class="mb-2 block text-xs font-black text-[#64748B]">المنهج</span><button type="button" (click)="openCurriculumPicker('create')" class="flex h-12 w-full items-center justify-between rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 text-sm font-black"><span>{{ selectedCurriculumName() }}</span><fa-icon [icon]="icons.curriculum"></fa-icon></button></label>
+    <label class="mt-4 block"><span class="mb-2 block text-xs font-black text-[#64748B]">تاريخ البداية</span><input type="date" [(ngModel)]="newGroupStartDate" class="h-12 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 text-sm font-bold outline-none focus:border-[#17B3A6]" /></label>
+    <button type="button" (click)="createGroup()" [disabled]="!newGroupName.trim() || !newGroupCurriculumId || !newGroupStartDate" class="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white disabled:opacity-40"><fa-icon [icon]="icons.add"></fa-icon><span>إنشاء المجموعة</span></button>
+  </aside>
+
+  <aside *ngIf="curriculumPickerOpen" class="fixed inset-x-0 bottom-0 z-[100] max-h-[88vh] overflow-y-auto rounded-t-[30px] bg-white p-5 shadow-[0_-20px_60px_rgba(15,23,42,0.22)] sm:left-5 sm:right-auto sm:top-5 sm:bottom-5 sm:w-[430px] sm:max-h-none sm:rounded-[28px]">
+    <div class="mb-5 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Curriculum Picker</span><h2 class="mt-1 text-xl font-black">اختر منهجًا</h2></div><button type="button" (click)="curriculumPickerOpen = false" class="grid h-10 w-10 place-items-center rounded-xl bg-[#F1F5F9] text-[#64748B]"><fa-icon [icon]="icons.close"></fa-icon></button></div>
+    <div class="relative mb-4"><fa-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8]" [icon]="icons.search"></fa-icon><input type="search" [(ngModel)]="curriculumSearch" placeholder="ابحث عن منهج..." class="h-12 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] pr-11 pl-4 text-sm font-bold outline-none focus:border-[#17B3A6]" /></div>
+    <div class="grid gap-2"><button type="button" *ngFor="let curriculum of filteredCurriculums" (click)="selectCurriculum(curriculum)" class="flex w-full items-center gap-3 rounded-2xl border border-[#E2E8F0] bg-white p-3 text-right transition hover:border-[#17B3A6] hover:bg-[#F1FBFA]"><div class="grid h-10 w-10 place-items-center rounded-xl bg-[#E6F6F4] text-[#0F766E]"><fa-icon [icon]="icons.curriculum"></fa-icon></div><div class="min-w-0 flex-1"><strong class="block truncate text-sm font-black">{{ curriculum.name }}</strong><span class="mt-1 block text-[11px] font-bold text-[#64748B]">{{ curriculum.weeks.length }} أسابيع</span></div></button></div>
+  </aside>
+
+  <aside *ngIf="lessonPickerOpen" class="fixed inset-x-0 bottom-0 z-[90] max-h-[88vh] overflow-y-auto rounded-t-[30px] bg-white p-5 shadow-[0_-20px_60px_rgba(15,23,42,0.22)] sm:left-5 sm:right-auto sm:top-5 sm:bottom-5 sm:w-[430px] sm:max-h-none sm:rounded-[28px]">
+    <div class="mb-5 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Lesson Picker</span><h2 class="mt-1 text-xl font-black">{{ lessonPickerMode === 'replace' ? 'استبدال الدرس داخل Draft' : 'إضافة إلى Group Draft' }}</h2></div><button type="button" (click)="lessonPickerOpen = false" class="grid h-10 w-10 place-items-center rounded-xl bg-[#F1F5F9] text-[#64748B]"><fa-icon [icon]="icons.close"></fa-icon></button></div>
+    <div class="relative mb-4"><fa-icon class="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8]" [icon]="icons.search"></fa-icon><input type="search" [(ngModel)]="lessonSearch" placeholder="ابحث عن درس..." class="h-12 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] pr-11 pl-4 text-sm font-bold outline-none focus:border-[#17B3A6]" /></div>
+    <div class="grid gap-2"><button type="button" *ngFor="let lesson of filteredLessons" (click)="selectLesson(lesson)" class="flex w-full items-center gap-3 rounded-2xl border p-3 text-right" [ngClass]="selectedLessonId === lesson.id ? 'border-[#17B3A6] bg-[#F1FBFA]' : 'border-[#E2E8F0] bg-white'"><div class="grid h-10 w-10 place-items-center rounded-xl bg-[#E6F6F4] text-[#0F766E]"><fa-icon [icon]="icons.curriculum"></fa-icon></div><div class="min-w-0 flex-1"><strong class="block truncate text-sm font-black">{{ lesson.title }}</strong><span class="mt-1 block text-[11px] font-bold text-[#64748B]">{{ lesson.segments.length }} جمل</span></div></button></div>
+    <section *ngIf="selectedLesson as lesson" class="mt-5 rounded-[22px] border border-[#BFE7E3] bg-[#F8FEFD] p-4"><strong class="text-sm font-black text-[#0F766E]">{{ lesson.title }}</strong><ng-container *ngIf="lessonPickerMode === 'add'"><label class="mt-4 block"><span class="mb-2 block text-xs font-black text-[#64748B]">عدد التكرارات</span><input type="number" min="1" [(ngModel)]="placementRepetitions" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-white px-3 text-sm font-black" /></label><label class="mt-4 flex items-center justify-between rounded-xl bg-white px-3 py-3"><span class="text-sm font-black">مطلوب</span><input type="checkbox" [(ngModel)]="placementRequired" class="h-5 w-5 accent-[#17B3A6]" /></label></ng-container><button type="button" (click)="addLessonToGroupDraft()" class="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white"><fa-icon [icon]="lessonPickerMode === 'replace' ? icons.move : icons.add"></fa-icon><span>{{ lessonPickerMode === 'replace' ? 'استبدال داخل Draft' : 'إضافة إلى Draft' }}</span></button></section>
+  </aside>
+
+  <aside *ngIf="slotActionsOpen" class="fixed inset-x-0 bottom-0 z-[90] rounded-t-[30px] bg-white p-5 shadow-[0_-20px_60px_rgba(15,23,42,0.22)] sm:left-5 sm:right-auto sm:top-5 sm:bottom-auto sm:w-[430px] sm:rounded-[28px]">
+    <div class="mb-5 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Draft Lesson Slot</span><h2 class="mt-1 text-xl font-black">إعدادات الدرس</h2></div><button type="button" (click)="slotActionsOpen = false" class="grid h-10 w-10 place-items-center rounded-xl bg-[#F1F5F9] text-[#64748B]"><fa-icon [icon]="icons.close"></fa-icon></button></div>
+    <label class="block"><span class="mb-2 block text-xs font-black text-[#64748B]">عدد التكرارات</span><input type="number" min="1" [(ngModel)]="activeRepetitionCount" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 text-sm font-black" /></label>
+    <label class="mt-4 flex items-center justify-between rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 py-3"><span class="text-sm font-black">مطلوب</span><input type="checkbox" [(ngModel)]="activeRequired" class="h-5 w-5 accent-[#17B3A6]" /></label>
+    <button type="button" (click)="saveDraftSlot()" class="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white"><fa-icon [icon]="icons.save"></fa-icon><span>حفظ في Draft</span></button>
+    <div class="mt-4 grid grid-cols-2 gap-3">
+      <label><span class="mb-2 block text-xs font-black text-[#64748B]">الأسبوع الهدف</span><select [(ngModel)]="targetWeekId" (ngModelChange)="onTargetWeekChanged()" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 text-xs font-black"><option *ngFor="let week of selectedGroup?.draftCurriculum?.weeks" [value]="week.id">{{ week.name }}</option></select></label>
+      <label><span class="mb-2 block text-xs font-black text-[#64748B]">اليوم الهدف</span><select [(ngModel)]="targetDayId" class="h-11 w-full rounded-xl border border-[#E2E8F0] bg-[#F8FAFC] px-3 text-xs font-black"><option *ngFor="let day of targetDays" [value]="day.id">{{ day.name }}</option></select></label>
+    </div>
+    <div class="mt-3 grid grid-cols-3 gap-2">
+      <button type="button" (click)="copyDraftSlot()" [disabled]="!targetDayId" class="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#BFE7E3] bg-[#F1FBFA] text-xs font-black text-[#0F766E] disabled:opacity-40"><fa-icon [icon]="icons.copy"></fa-icon><span>نسخ</span></button>
+      <button type="button" (click)="moveDraftSlot()" [disabled]="!targetDayId || (targetWeekId === activeWeekId && targetDayId === activeDayId)" class="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#BFE7E3] bg-[#F1FBFA] text-xs font-black text-[#0F766E] disabled:opacity-40"><fa-icon [icon]="icons.move"></fa-icon><span>نقل</span></button>
+      <button type="button" (click)="replaceDraftSlot()" class="flex h-11 items-center justify-center gap-2 rounded-xl border border-[#E2E8F0] bg-white text-xs font-black text-[#475569]"><fa-icon [icon]="icons.curriculum"></fa-icon><span>استبدال</span></button>
+    </div>
+    <button type="button" (click)="removeDraftSlot()" class="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] text-sm font-black text-[#DC2626]"><fa-icon [icon]="icons.remove"></fa-icon><span>إزالة من Group Draft</span></button>
+  </aside>
+
+  <aside *ngIf="saveAsOpen" class="fixed inset-x-0 bottom-0 z-[90] rounded-t-[30px] bg-white p-5 shadow-[0_-20px_60px_rgba(15,23,42,0.22)] sm:left-5 sm:right-auto sm:top-5 sm:bottom-auto sm:w-[430px] sm:rounded-[28px]">
+    <div class="mb-5 flex items-center justify-between"><div><span class="text-xs font-black text-[#0F766E]">Save as New Curriculum</span><h2 class="mt-1 text-xl font-black">حفظ نسخة المنهج</h2></div><button type="button" (click)="saveAsOpen = false" class="grid h-10 w-10 place-items-center rounded-xl bg-[#F1F5F9] text-[#64748B]"><fa-icon [icon]="icons.close"></fa-icon></button></div>
+    <label class="block"><span class="mb-2 block text-xs font-black text-[#64748B]">اسم المنهج الجديد</span><input type="text" [(ngModel)]="newCurriculumName" placeholder="مثال: منهج 4 شهور — مطور" class="h-12 w-full rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] px-4 text-sm font-bold outline-none focus:border-[#17B3A6]" /></label>
+    <button type="button" (click)="saveAsNewCurriculum()" [disabled]="!newCurriculumName.trim()" class="mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#17B3A6] text-sm font-black text-white disabled:opacity-40"><fa-icon [icon]="icons.save"></fa-icon><span>حفظ في Curriculum Library</span></button>
+  </aside>
+</section>

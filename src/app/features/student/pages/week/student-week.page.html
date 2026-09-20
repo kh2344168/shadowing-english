@@ -1,0 +1,41 @@
+<section class="student-page student-page--narrow" dir="rtl" aria-labelledby="week-title">
+  <header class="student-page-header">
+    <a routerLink="/student/weeks" class="student-back" aria-label="العودة للأسابيع">←</a>
+    <div *ngIf="week as currentWeek">
+      <span class="student-kicker">أسبوعك الحالي</span><h1 id="week-title">{{ currentWeek.name }}</h1>
+      <p>كمّل المراحل بالترتيب، وكل درس جديد هيفتح تلقائيًا.</p>
+    </div>
+  </header>
+
+  <div *ngIf="loading()" class="student-loading" role="status">بنجهز دروس الأسبوع...</div>
+
+  <ng-container *ngIf="!loading() && week as currentWeek">
+    <section class="student-week-summary">
+      <div><strong>{{ currentWeek.progressPercent }}%</strong><span>من الأسبوع اكتمل</span></div>
+      <div class="student-progress-track"><span [style.width.%]="currentWeek.progressPercent"></span></div>
+    </section>
+
+    <ol class="student-path" aria-label="دروس الأسبوع بالترتيب">
+      <li *ngFor="let lesson of currentWeek.lessons; let lessonIndex = index" [class.student-path__item--locked]="lesson.isLocked">
+        <span class="student-path__line" aria-hidden="true"></span>
+        <span class="student-path__node">{{ lesson.isCompleted ? '✓' : lesson.isLocked ? '🔒' : lessonIndex + 1 }}</span>
+        <article class="student-path__card">
+          <div>
+            <span class="student-kicker">الدرس {{ lessonIndex + 1 }}</span>
+            <h2>{{ lesson.lesson.title }}</h2>
+            <p>{{ lesson.isCompleted ? 'خلصته وتقدر تراجعه في أي وقت.' : lesson.isLocked ? 'هيفتح بعد إنهاء الدرس السابق.' : 'أربع مراحل قصيرة ومنظمة.' }}</p>
+          </div>
+          <div class="student-path__meta"><span>{{ lesson.completedStageCount }}/4 مراحل</span><span>حوالي 19 دقيقة</span></div>
+          <a
+            *ngIf="!lesson.isLocked"
+            [routerLink]="['/student/lessons', lesson.lesson.id]"
+            [queryParams]="{ slotId: lesson.curriculumSlotId }"
+            class="student-secondary-action"
+          >{{ lesson.isCompleted ? 'راجع الدرس' : lesson.completedStageCount ? 'كمّل الدرس' : 'افتح الدرس' }}</a>
+        </article>
+      </li>
+    </ol>
+  </ng-container>
+
+  <section *ngIf="!loading() && !week" class="student-empty-state"><span>🔎</span><h2>الأسبوع غير موجود</h2><a routerLink="/student/weeks">ارجع للأسابيع</a></section>
+</section>

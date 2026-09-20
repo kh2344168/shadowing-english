@@ -1,0 +1,72 @@
+<div *ngIf="open" class="stage-result-overlay" role="dialog" aria-modal="true" aria-labelledby="stage-result-title">
+  <section class="stage-result-card">
+    <div class="stage-result-card__handle" aria-hidden="true"></div>
+
+    <header class="stage-result-card__header">
+      <div class="stage-result-card__icon" aria-hidden="true">✓</div>
+      <div>
+        <span class="stage-result-card__eyebrow">تم حفظ تقدمك</span>
+        <h2 id="stage-result-title">برافو عليك 🎉</h2>
+        <p *ngIf="!lessonComplete; else lessonDoneCopy">
+          أنهيت <strong>{{ stageLabel }}</strong>. المرحلة التالية: <strong>{{ nextStageLabel }}</strong>.
+        </p>
+        <ng-template #lessonDoneCopy>
+          <p>أنهيت <strong>{{ stageLabel }}</strong> وكملت كل مراحل الدرس.</p>
+        </ng-template>
+      </div>
+    </header>
+
+    <section class="stage-result-card__score" [class.no-score]="normalizedScore === null">
+      <ng-container *ngIf="normalizedScore !== null; else completedOnly">
+        <div class="stage-result-card__score-ring" [style.--score]="normalizedScore + '%'">
+          <strong>{{ normalizedScore }}%</strong>
+        </div>
+        <div class="stage-result-card__score-copy">
+          <span>{{ scoreLabel }}</span>
+          <b>{{ qualityLabel || 'تمت المرحلة' }}</b>
+        </div>
+      </ng-container>
+      <ng-template #completedOnly>
+        <div class="stage-result-card__completed-mark">✓</div>
+        <div class="stage-result-card__score-copy">
+          <span>{{ scoreLabel }}</span>
+          <b>{{ qualityLabel || 'تمت المرحلة بنجاح' }}</b>
+        </div>
+      </ng-template>
+    </section>
+
+    <div *ngIf="metrics.length" class="stage-result-card__metrics">
+      <article *ngFor="let metric of metrics">
+        <strong>{{ metric.value }}</strong>
+        <span>{{ metric.label }}</span>
+      </article>
+    </div>
+
+    <div *ngIf="insightSections.length" class="stage-result-card__insights">
+      <section *ngFor="let section of insightSections" [attr.data-tone]="section.tone || 'focus'">
+        <strong>{{ section.title }}</strong>
+        <ul>
+          <li *ngFor="let item of section.items">{{ item }}</li>
+        </ul>
+      </section>
+    </div>
+
+    <p *ngIf="note" class="stage-result-card__note">{{ note }}</p>
+
+    <section *ngIf="totalStages > 0" class="stage-result-card__progress" aria-label="تقدم مراحل الدرس">
+      <div><span [style.width.%]="progressPercent"></span></div>
+      <small>{{ completedStages }} من {{ totalStages }} مراحل مكتملة</small>
+    </section>
+
+    <ng-content select="[completion-extra]"></ng-content>
+
+    <footer class="stage-result-card__actions">
+      <button type="button" class="stage-result-card__primary" (click)="continue.emit()">
+        {{ resolvedPrimaryActionLabel }}
+      </button>
+      <button type="button" class="stage-result-card__secondary" (click)="review.emit()">
+        {{ secondaryActionLabel }}
+      </button>
+    </footer>
+  </section>
+</div>

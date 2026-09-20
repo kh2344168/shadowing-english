@@ -1,0 +1,50 @@
+<section class="login-screen" dir="rtl">
+  <div class="login-story" aria-hidden="true">
+    <div class="login-story__brand"><span>〽</span><strong>Shadowing</strong><small>English</small></div>
+    <div class="login-story__copy">
+      <span class="login-kicker">اسمع · ردد · اتكلم بثقة</span>
+      <h1>خلي الإنجليزي<br />جزء من يومك.</h1>
+      <p>دروس قصيرة، خطوات واضحة، ومراجعات ذكية تساعدك تثبّت النطق من غير تشتت.</p>
+    </div>
+    <div class="login-story__visual">
+      <span class="login-float login-float--one">Hello!</span>
+      <span class="login-character">🎧</span>
+      <span class="login-float login-float--two">You sound great</span>
+      <div class="login-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </div>
+  </div>
+
+  <main class="login-panel">
+    <div class="login-panel__inner">
+      <div class="login-mobile-brand"><span>〽</span><strong>Shadowing English</strong></div>
+      <span class="login-kicker">أهلًا برجوعك</span>
+      <h2>سجّل دخولك وكمّل من مكانك</h2>
+      <p class="login-hint">استخدم بيانات الحساب التي استلمتها من المشرف.</p>
+
+      <form (ngSubmit)="login()" class="login-form">
+        <div class="login-field">
+          <label for="login-email">البريد الإلكتروني</label>
+          <input id="login-email" name="email" type="email" autocomplete="username" [(ngModel)]="email" placeholder="name@example.com" dir="ltr" required />
+        </div>
+        <div class="login-field">
+          <label for="login-password">كلمة المرور</label>
+          <div class="login-password-wrap">
+            <input id="login-password" name="password" [type]="showPassword ? 'text' : 'password'" autocomplete="current-password" [(ngModel)]="password" placeholder="••••••••" dir="ltr" required />
+            <button type="button" (click)="showPassword = !showPassword" [attr.aria-label]="showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'">{{ showPassword ? 'إخفاء' : 'إظهار' }}</button>
+          </div>
+        </div>
+        <div class="login-options"><label><input type="checkbox" name="remember" [(ngModel)]="rememberMe" />تذكرني</label><button type="button" (click)="showPasswordHelp()">نسيت كلمة المرور؟</button></div>
+        <p *ngIf="error" class="login-error" role="alert">{{ error }}</p>
+        <p *ngIf="notice" class="login-notice" role="status">{{ notice }}</p>
+        <button class="login-submit" type="submit" [disabled]="submitting">{{ submitting ? 'جاري الدخول...' : 'دخول إلى مساري' }}<span>←</span></button>
+      </form>
+
+      <details class="login-demo" open>
+        <summary>حسابات العرض والتجربة</summary>
+        <p>افتح كل دور في تبويب مستقل. الجلسة تخص التبويب الحالي فقط، وكلمة المرور لكل الحسابات <strong>123456</strong>.</p>
+        <div><button type="button" (click)="useStudentDemo()">دخول كطالب</button><button type="button" (click)="useTeacherDemo()">دخول كمدرس</button><button type="button" (click)="useSupervisorDemo()">دخول كمشرف</button><button type="button" (click)="useAdminDemo()">دخول كأدمن</button></div>
+      </details>
+      <small class="login-support">محتاج مساعدة؟ تواصل مع مشرف مجموعتك.</small>
+    </div>
+  </main>
+</section>

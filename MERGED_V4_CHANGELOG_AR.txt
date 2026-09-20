@@ -1,0 +1,76 @@
+SHADOWING ENGLISH — MERGED V4 CHANGELOG
+
+==================================================
+الدمج
+==================================================
+
+- تم اعتماد app-teacher-flow-v3 المرسل كأساس وعدم إنشاء Components بديلة.
+- تم دمج Backend .NET 10 داخل نفس المشروع الحالي.
+- تم الحفاظ على storage key: english-shadowing-platform-v8.
+- تم الحفاظ على Lesson Builder وLesson Player وتعديل Data Context فقط عند الحاجة.
+
+==================================================
+Student وProgress
+==================================================
+
+- Student Dashboard يقرأ Published Group Curriculum فقط.
+- Dashboard يطلب Lesson content بواسطة slot.lessonId.
+- Dashboard يمرر slotId إلى Lesson Player.
+- Lesson Player يستخدم repetitionCount الخاصة بالـSlot.
+- Progress أصبح مستقلًا لكل studentId + groupId + curriculumSlotId.
+- Recording metadata أصبحت تحمل groupId وcurriculumSlotId.
+- نفس Lesson داخل Slotين لها تقدمان مستقلان.
+- Move يحتفظ بالـslotId وبالتالي يحتفظ بالتقدم.
+- Replace يغيّر Lesson داخل نفس Slot ويصفر تقدم الدرس القديم.
+- حذف Recording يقلل التقدم محليًا ويرسله إلى الـBackend.
+- Progress المحذوف من Published أو الخاص بمجموعة قديمة يتحول إلى Inactive في SQL بدل حذفه فورًا.
+
+==================================================
+Lessons
+==================================================
+
+- حفظ Lesson وSegments وMedia داخل SQL Server.
+- تحميل الدروس والـMedia من الـAPI عند فتح التطبيق.
+- Duplicate ينسخ Lesson وMedia بمعرّف جديد.
+- Archive وUnarchive.
+- Download Metadata JSON.
+- Export كامل بصيغة .shadowlesson.zip يحتوي lesson.json والـMedia.
+- Import للملف الكامل مع Validation وID collision handling.
+- Safe Delete يفحص Curriculum وGroup Draft وGroup Published.
+- Safe Delete يمنع حذف الدرس المستخدم ويعرض أماكن الاستخدام.
+- عند الحذف المسموح يتم تنظيف Lesson وMedia وProgress وRecording metadata وBlobs.
+- Backend يمنع أيضًا حذف Lesson موجودة داخل Published Group Curriculum.
+
+==================================================
+Groups وCurriculum
+==================================================
+
+- Curriculum الأصلية تظل Template مستقلة.
+- تعديل Curriculum الأصلية لا يغيّر Group Copies القديمة تلقائيًا.
+- Group Curriculum لها Draft وPublished.
+- الطالب لا يرى Draft.
+- Add / Update / Remove / Copy / Move / Replace متاحة داخل Group Draft.
+- Publish فقط هو الذي يرسل النسخة الجديدة للطالب والـBackend.
+- Reset Draft يرجع لآخر Published.
+- Save As New Curriculum يحتفظ بالنسخة كتTemplate جديدة.
+
+==================================================
+Backend وDatabase
+==================================================
+
+- نفس ShadowingEnglish.Api ونفس ShadowingEnglishMvp.
+- Lessons وLessonSegments tables.
+- GroupCurriculumPublications table.
+- StudentProgress مع IsActive.
+- Migrations كاملة مرفقة من أول InitialProgressMvp.
+- Health endpoint كما هو.
+
+==================================================
+التحقق المنفذ قبل التسليم
+==================================================
+
+- Angular production build: ناجح.
+- Angular/Vitest: 8 اختبارات ناجحة.
+- Smoke test لخدمة Angular والمسارات / و/teacher/lessons: HTTP 200.
+- تم فحص توازن ملفات C# ومراجعة الموديلات والـControllers والـServices يدويًا.
+- يجب تشغيل dotnet build على Windows بعد فك الملف لأن بيئة تجهيز النسخة لا تحتوي .NET SDK.

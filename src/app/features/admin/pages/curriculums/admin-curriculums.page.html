@@ -1,0 +1,111 @@
+<section dir="rtl" class="mx-auto w-full max-w-[1520px] pb-8">
+  <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <div class="mb-2 flex items-center gap-2">
+        <h1 class="m-0 text-2xl font-bold tracking-tight text-[#0B1C30]">المناهج التعليمية</h1>
+        <span class="rounded-full bg-[#DAE2FD] px-2.5 py-1 text-xs font-semibold text-[#5C647A]">{{ curriculums.length }} مناهج</span>
+      </div>
+      <p class="m-0 max-w-2xl text-sm leading-6 text-[#3E4947]">إدارة بنية المناهج وربط الدروس بالأسابيع والأيام. النشر للطلاب يتم من صفحة المجموعات فقط.</p>
+    </div>
+    <button type="button" (click)="createOpen = true" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[#004E47]">
+      <span class="material-symbols-outlined text-[20px]">add</span>
+      إنشاء منهج
+    </button>
+  </header>
+
+  <p *ngIf="feedback" class="mb-5 rounded-xl bg-[#EFF4FF] px-4 py-3 text-sm font-semibold text-[#004E47]">{{ feedback }}</p>
+
+  <section class="mb-6 flex flex-col gap-4 rounded-xl bg-white p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+    <div class="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center">
+      <div class="relative w-full lg:max-w-sm">
+        <input [(ngModel)]="searchTerm" type="text" class="h-11 w-full rounded-xl bg-[#EFF4FF] py-2 pl-4 pr-10 text-sm outline-none focus:bg-[#E5EEFF]" placeholder="ابحث عن منهج..." />
+        <span class="material-symbols-outlined pointer-events-none absolute right-3 top-3 text-[20px] text-[#6E7977]">search</span>
+      </div>
+      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+        <button *ngFor="let level of levelFilters" type="button" (click)="selectedLevel = level" class="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition"
+          [ngClass]="selectedLevel === level ? 'bg-[#00685F] text-white' : 'bg-[#EFF4FF] text-[#3E4947] hover:bg-[#E5EEFF]'">
+          {{ level === 'all' ? 'كل المستويات' : level }}
+        </button>
+      </div>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <select [(ngModel)]="selectedStatus" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
+        <option value="all">كل الحالات</option>
+        <option value="ready">نشط</option>
+        <option value="draft">مسودة</option>
+        <option value="archived">مؤرشف</option>
+      </select>
+      <select [(ngModel)]="selectedSort" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
+        <option value="newest">الأحدث</option>
+        <option value="oldest">الأقدم</option>
+        <option value="name">الاسم</option>
+      </select>
+    </div>
+  </section>
+
+  <div *ngIf="visibleCurriculums.length === 0" class="rounded-2xl border border-dashed border-[#BEC9C6] bg-white px-5 py-14 text-center">
+    <span class="material-symbols-outlined text-[36px] text-[#6E7977]">menu_book</span>
+    <h2 class="mb-1 mt-3 text-lg font-bold">لا توجد مناهج مطابقة</h2>
+    <p class="m-0 text-sm text-[#6E7977]">غيّر الفلاتر أو أنشئ منهجًا جديدًا.</p>
+  </div>
+
+  <section *ngIf="visibleCurriculums.length > 0" class="grid grid-cols-1 gap-6 md:grid-cols-2">
+    <article *ngFor="let curriculum of visibleCurriculums" class="relative flex min-h-[270px] flex-col justify-between rounded-xl bg-white p-6 shadow-sm transition hover:shadow-md" [class.opacity-70]="curriculum.status === 'archived'">
+      <div>
+        <div class="mb-4 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="rounded-full bg-[#E5EEFF] px-3 py-1 text-xs font-bold text-[#004E47]">{{ curriculumLevel(curriculum) === '—' ? 'CEFR غير محدد' : curriculumLevel(curriculum) }}</span>
+            <span class="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold"
+              [ngClass]="curriculum.status === 'ready' ? 'bg-[#DDF7EC] text-[#005137]' : curriculum.status === 'draft' ? 'bg-[#DCE9FF] text-[#565E74]' : 'bg-[#EFF4FF] text-[#6E7977]'">
+              <span class="h-1.5 w-1.5 rounded-full" [ngClass]="curriculum.status === 'ready' ? 'bg-[#006A49]' : 'bg-[#6E7977]'"></span>
+              {{ statusLabel(curriculum.status) }}
+            </span>
+          </div>
+          <div class="relative">
+            <button type="button" (click)="toggleMenu(curriculum.id)" class="grid h-8 w-8 place-items-center rounded-lg text-[#6E7977] hover:bg-[#EFF4FF]" aria-label="خيارات المنهج">
+              <span class="material-symbols-outlined text-[20px]">more_vert</span>
+            </button>
+            <div *ngIf="openMenuId === curriculum.id" class="absolute left-0 top-9 z-20 w-44 overflow-hidden rounded-xl bg-white py-1 shadow-xl">
+              <a [routerLink]="['/admin/curriculums', curriculum.id]" class="flex items-center gap-2 px-3.5 py-2 text-sm text-[#0B1C30] no-underline hover:bg-[#EFF4FF]"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">edit</span>فتح وتعديل</a>
+              <button type="button" (click)="duplicate(curriculum)" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm hover:bg-[#EFF4FF]"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">content_copy</span>نسخ المنهج</button>
+              <button *ngIf="curriculum.status !== 'archived'" type="button" (click)="archive(curriculum)" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm hover:bg-[#EFF4FF]"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">archive</span>أرشفة</button>
+              <button type="button" (click)="deleteCurriculum(curriculum)" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm text-[#BA1A1A] hover:bg-[#FFF0EE]"><span class="material-symbols-outlined text-[17px]">delete</span>حذف نهائي</button>
+            </div>
+          </div>
+        </div>
+
+        <h2 class="m-0 text-lg font-semibold text-[#0B1C30]">{{ curriculum.name }}</h2>
+        <p class="mt-2 line-clamp-2 min-h-12 text-sm leading-6 text-[#3E4947]">{{ curriculum.description || 'لا يوجد وصف للمنهج بعد.' }}</p>
+        <div class="mt-5 flex items-center justify-between rounded-lg bg-[#EFF4FF] px-4 py-3 text-xs font-semibold text-[#3E4947]">
+          <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[17px] text-[#00685F]">calendar_view_week</span>{{ curriculum.weeks.length }} أسابيع</span>
+          <span class="text-[#BEC9C6]">•</span>
+          <span class="flex items-center gap-1.5"><span class="material-symbols-outlined text-[17px] text-[#00685F]">play_lesson</span>{{ lessonsCount(curriculum) }} درسًا</span>
+        </div>
+      </div>
+
+      <div class="mt-5 flex items-center justify-between gap-3">
+        <span class="text-xs text-[#6E7977]">آخر تحديث {{ curriculum.updatedAt | date:'shortDate' }}</span>
+        <a [routerLink]="['/admin/curriculums', curriculum.id]" class="inline-flex h-10 items-center gap-1 rounded-xl bg-[#EFF4FF] px-4 text-sm font-semibold text-[#004E47] no-underline transition hover:bg-[#00685F] hover:text-white">
+          فتح المنهج <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+        </a>
+      </div>
+    </article>
+  </section>
+
+  <footer *ngIf="visibleCurriculums.length > 0" class="mt-6 flex items-center justify-between rounded-xl bg-white px-5 py-4 text-sm text-[#3E4947] shadow-sm">
+    <span>عرض <strong>{{ visibleCurriculums.length }}</strong> من أصل <strong>{{ curriculums.length }}</strong> منهج</span>
+    <span class="rounded-lg bg-[#00685F] px-3 py-2 text-xs font-bold text-white">1</span>
+  </footer>
+
+  <div *ngIf="createOpen" class="fixed inset-0 z-[70] grid place-items-center bg-[#213145]/40 p-4" (click)="createOpen = false">
+    <form (ngSubmit)="createCurriculum()" (click)="$event.stopPropagation()" class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+      <div class="mb-5 flex items-center justify-between">
+        <div><h2 class="m-0 text-xl font-bold">إنشاء منهج جديد</h2><p class="mt-1 text-sm text-[#6E7977]">سيُنشأ كمسودة ويمكنك بعدها إضافة الأسابيع والدروس.</p></div>
+        <button type="button" (click)="createOpen = false" class="grid h-9 w-9 place-items-center rounded-lg text-[#6E7977] hover:bg-[#EFF4FF]"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <label class="block text-sm font-semibold">اسم المنهج<input [(ngModel)]="newCurriculumName" name="name" class="mt-2 h-11 w-full rounded-xl bg-[#EFF4FF] px-4 outline-none" placeholder="مثال: English A1 Foundation" /></label>
+      <label class="mt-4 block text-sm font-semibold">وصف مختصر<textarea [(ngModel)]="newCurriculumDescription" name="description" rows="4" class="mt-2 w-full rounded-xl bg-[#EFF4FF] p-4 outline-none" placeholder="وصف الهدف من المنهج..."></textarea></label>
+      <div class="mt-6 flex justify-end gap-2"><button type="button" (click)="createOpen = false" class="h-10 rounded-xl bg-[#EFF4FF] px-4 text-sm font-semibold">إلغاء</button><button type="submit" class="h-10 rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white">إنشاء المنهج</button></div>
+    </form>
+  </div>
+</section>

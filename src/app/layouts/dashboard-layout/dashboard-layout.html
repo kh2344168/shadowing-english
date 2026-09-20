@@ -1,0 +1,31 @@
+<main class="dashboard-layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <span>S</span>
+      <div>
+        <strong>Shadowing</strong>
+        <small>Platform MVP</small>
+      </div>
+    </div>
+
+    <nav>
+      <a routerLink="/teacher/dashboard" routerLinkActive="active" *ngIf="auth.isTeacher()">Teacher Dashboard</a>
+      <a routerLink="/lessons/builder" routerLinkActive="active" *ngIf="auth.isTeacher()">Lesson Builder</a>
+      <a routerLink="/teacher/students" routerLinkActive="active" *ngIf="auth.isTeacher()">Students</a>
+      <a routerLink="/teacher/progress" routerLinkActive="active" *ngIf="auth.isTeacher()">Progress</a>
+
+      <a routerLink="/student/dashboard" routerLinkActive="active" *ngIf="auth.isStudent()">Student Dashboard</a>
+    </nav>
+
+    <div class="user-card" *ngIf="auth.currentUser as user">
+      <span>{{ user.role }}</span>
+      <strong>{{ user.name }}</strong>
+      <small>{{ user.email }}</small>
+      <button type="button" (click)="logout()">Logout</button>
+    </div>
+  </aside>
+
+  <section class="content">
+    <router-outlet></router-outlet>
+  </section>
+</main>

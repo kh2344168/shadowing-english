@@ -1,0 +1,40 @@
+<section dir="rtl" class="mx-auto w-full max-w-[1520px] pb-8">
+  <header class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <div>
+      <div class="mb-2 flex items-center gap-2"><h1 class="m-0 text-2xl font-bold">متابعة الطلاب</h1><span class="rounded-full bg-[#DAE2FD] px-2.5 py-1 text-xs font-semibold text-[#5C647A]">{{ students.length }} طالب</span></div>
+      <p class="m-0 max-w-3xl text-sm leading-6 text-[#3E4947]">بيانات حقيقية من الـBackend: المجموعة، المستوى، الالتزام، التقدم، آخر نشاط والتسجيلات.</p>
+    </div>
+    <button type="button" (click)="createOpen = true" class="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white"><span class="material-symbols-outlined text-[20px]">person_add</span>إضافة طالب</button>
+  </header>
+
+  <p *ngIf="feedback" class="mb-5 rounded-xl bg-[#EFF4FF] px-4 py-3 text-sm font-semibold text-[#004E47]">{{ feedback }}</p>
+  <div *ngIf="loading" class="rounded-xl bg-white p-10 text-center text-sm text-[#6E7977] shadow-sm">جاري تحميل الطلاب من السيرفر...</div>
+
+  <ng-container *ngIf="!loading">
+    <section class="mb-5 flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+      <div class="relative w-full max-w-md"><input [(ngModel)]="searchTerm" class="h-11 w-full rounded-xl bg-[#EFF4FF] py-2 pl-4 pr-10 text-sm outline-none" placeholder="ابحث بالاسم أو البريد..." /><span class="material-symbols-outlined pointer-events-none absolute right-3 top-3 text-[20px] text-[#6E7977]">search</span></div>
+      <div class="flex flex-wrap gap-2">
+        <select [(ngModel)]="groupFilter" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold"><option value="all">كل المجموعات</option><option *ngFor="let group of groups" [value]="group.id">{{ group.name }}</option></select>
+        <select [(ngModel)]="engagementFilter" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold"><option value="all">كل حالات الالتزام</option><option value="committed">ملتزم</option><option value="needs-attention">يحتاج متابعة</option><option value="not-committed">غير ملتزم</option><option value="not-started">لم يبدأ</option></select>
+        <select [(ngModel)]="subscriptionFilter" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold"><option value="all">كل الاشتراكات</option><option value="active">نشط</option><option value="expired">منتهي</option><option value="paused">موقوف</option></select>
+      </div>
+    </section>
+
+    <section class="overflow-hidden rounded-xl bg-white shadow-sm">
+      <div class="overflow-x-auto"><table class="w-full min-w-[1280px] border-collapse text-right text-sm"><thead><tr class="h-12 bg-[#EFF4FF] text-xs font-semibold text-[#3E4947]"><th class="px-5">الطالب</th><th class="px-4">المجموعة / المستوى</th><th class="px-4">الالتزام</th><th class="px-4">التقدم</th><th class="px-4">آخر نشاط</th><th class="px-4">نقل المجموعة</th><th class="px-4">الحساب</th><th class="px-5 text-left">التفاصيل</th></tr></thead>
+      <tbody><tr *ngFor="let student of visibleStudents" class="border-t border-[#EFF4FF] hover:bg-[#F8F9FF]">
+        <td class="px-5 py-4"><div class="flex items-center gap-3"><span class="grid h-10 w-10 place-items-center rounded-full bg-[#DAE2FD] font-bold text-[#004E47]">{{ student.name.slice(0,1) }}</span><div><strong class="block">{{ student.name }}</strong><span class="text-xs text-[#6E7977]">{{ student.email }}</span></div></div></td>
+        <td class="px-4 py-4"><strong class="block">{{ student.groupName }}</strong><span class="mt-1 inline-block rounded-full bg-[#EFF4FF] px-2 py-1 text-xs font-bold text-[#004E47]">{{ student.cefrLevel }}</span></td>
+        <td class="px-4 py-4"><span class="rounded-full px-3 py-1 text-xs font-semibold" [ngClass]="student.engagementStatus === 'committed' ? 'bg-[#DDF7EC] text-[#005137]' : student.engagementStatus === 'not-committed' ? 'bg-[#FFDAD6] text-[#93000A]' : 'bg-[#FFF3CD] text-[#755A00]'">{{ engagementLabel(student.engagementStatus) }}</span><small class="mt-2 block max-w-48 text-[10px] leading-4 text-[#6E7977]">{{ student.engagementReason }}</small></td>
+        <td class="px-4 py-4"><div class="min-w-36"><div class="mb-1 flex justify-between text-xs"><span>{{ student.completedLessons }}/{{ student.totalLessons }} دروس</span><strong>{{ student.progressPercent }}%</strong></div><div class="h-2 overflow-hidden rounded-full bg-[#EFF4FF]"><span class="block h-full rounded-full bg-[#00685F]" [style.width.%]="student.progressPercent"></span></div><small class="mt-1 block text-[10px] text-[#6E7977]">🎙️ {{ student.recordingCount }} تسجيل</small></div></td>
+        <td class="px-4 py-4 text-xs text-[#3E4947]">{{ student.lastSeenAtUtc ? (student.lastSeenAtUtc | date:'short') : 'لا يوجد نشاط' }}</td>
+        <td class="px-4 py-4"><div class="flex items-center gap-2"><select [(ngModel)]="selectedGroupByStudent[student.id]" class="h-9 min-w-40 rounded-lg bg-[#EFF4FF] px-2 text-xs"><option *ngFor="let group of groups" [value]="group.id">{{ group.name }}</option></select><button type="button" [disabled]="busy" (click)="moveStudent(student.id)" class="h-9 rounded-lg bg-[#DAE2FD] px-3 text-xs font-semibold">نقل</button></div></td>
+        <td class="px-4 py-4"><div class="flex flex-wrap gap-1"><button type="button" (click)="setSubscription(student,'active')" class="rounded-lg bg-[#DDF7EC] px-2 py-1 text-[11px]">تفعيل اشتراك</button><button type="button" (click)="setSubscription(student,'paused')" class="rounded-lg bg-[#EFF4FF] px-2 py-1 text-[11px]">إيقاف</button><button type="button" (click)="resetPassword(student.id)" class="rounded-lg bg-[#EFF4FF] px-2 py-1 text-[11px]">كلمة مرور</button></div></td>
+        <td class="px-5 py-4 text-left"><a [routerLink]="['/admin/students', student.id]" class="inline-flex h-9 items-center gap-1 rounded-lg bg-[#00685F] px-3 text-xs font-semibold text-white no-underline"><span class="material-symbols-outlined text-[17px]">visibility</span>فتح الملف</a></td>
+      </tr></tbody></table></div>
+      <div *ngIf="visibleStudents.length === 0" class="p-12 text-center text-sm text-[#6E7977]">لا توجد نتائج.</div>
+    </section>
+  </ng-container>
+
+  <div *ngIf="createOpen" class="fixed inset-0 z-[70] grid place-items-center bg-[#213145]/40 p-4" (click)="createOpen=false"><form (ngSubmit)="addStudent()" (click)="$event.stopPropagation()" class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl"><div class="mb-5 flex justify-between"><div><h2 class="m-0 text-xl font-bold">إضافة طالب على السيرفر</h2><p class="mt-1 text-sm text-[#6E7977]">سيتم إنشاء حساب وكلمة مرور مؤقتة في SQL.</p></div><button type="button" (click)="createOpen=false">✕</button></div><label class="block text-sm font-semibold">الاسم<input [(ngModel)]="name" name="name" class="mt-2 h-11 w-full rounded-xl bg-[#EFF4FF] px-4" /></label><label class="mt-4 block text-sm font-semibold">البريد<input [(ngModel)]="email" name="email" type="email" dir="ltr" class="mt-2 h-11 w-full rounded-xl bg-[#EFF4FF] px-4 text-left" /></label><div class="mt-4 grid grid-cols-2 gap-3"><label class="block text-sm font-semibold">المجموعة<select [(ngModel)]="groupId" name="groupId" class="mt-2 h-11 w-full rounded-xl bg-[#EFF4FF] px-3"><option *ngFor="let group of groups" [value]="group.id">{{ group.name }}</option></select></label><label class="block text-sm font-semibold">المستوى<select [(ngModel)]="cefrLevel" name="cefrLevel" class="mt-2 h-11 w-full rounded-xl bg-[#EFF4FF] px-3"><option *ngFor="let level of ['A1','A2','B1','B2','C1','C2']">{{ level }}</option></select></label></div><div class="mt-6 flex justify-end gap-2"><button type="button" (click)="createOpen=false" class="h-10 rounded-xl bg-[#EFF4FF] px-4">إلغاء</button><button type="submit" [disabled]="busy" class="h-10 rounded-xl bg-[#00685F] px-5 font-semibold text-white">{{ busy ? 'جاري الحفظ...' : 'إضافة الطالب' }}</button></div></form></div>
+</section>

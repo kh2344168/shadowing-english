@@ -1,0 +1,604 @@
+<section dir="rtl" class="mx-auto w-full max-w-[1520px] pb-24 sm:pb-8">
+  <div class="w-full">
+    <div *ngIf="loading()" class="rounded-xl border border-[#E5EEFF] bg-white p-12 text-center font-black text-[#64748B]">
+      بنجهز محتوى الدرس للمراجعة...
+    </div>
+
+    <ng-container *ngIf="!loading() && lesson as currentLesson">
+      <header class="mb-6 flex flex-col gap-4 rounded-xl border border-[#E5EEFF] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)] sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <a *ngIf="isOverview" [routerLink]="contentBasePath + '/lessons'" class="text-xs font-black text-[#004E47] no-underline">← الرجوع لمكتبة الدروس</a>
+          <a *ngIf="!isOverview" [routerLink]="[contentBasePath + '/lessons', currentLesson.id, 'content-review']" class="text-xs font-black text-[#004E47] no-underline">← الرجوع لترتيب مراحل الدرس</a>
+          <span class="mt-4 block text-xs font-black uppercase tracking-[0.16em] text-[#00685F]">Admin Content Review</span>
+          <h1 class="mt-1 text-2xl font-black sm:text-3xl">مراجعة محتوى: {{ currentLesson.title }}</h1>
+          <p class="mt-2 text-sm font-bold leading-7 text-[#64748B]">{{ isStudentPreview ? 'أنت الآن تمرّ على الدرس بنفس ترتيب الطالب.' : isOverview ? 'المعالجة تحفظ الدرس معتمدًا تلقائيًا. افتح أي مرحلة للمراجعة، واجعلها غير معتمدة فقط إذا وجدت مشكلة.' : 'راجع المحتوى وعدّل ما تريد. حالة الاعتماد لا تتغير تلقائيًا بسبب التعديل.' }}</p>
+        </div>
+
+        <div *ngIf="isOverview" class="flex flex-wrap gap-2">
+          <a [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: currentLesson.id }" class="inline-flex h-11 items-center rounded-2xl border border-[#A1F1E5] bg-[#EFFBF8] px-4 text-sm font-black text-[#004E47] no-underline">تعديل الملف والجمل والتوقيت</a>
+          <button type="button" (click)="reprocessLesson()" [disabled]="saving()" class="h-11 rounded-2xl border border-[#E5EEFF] bg-white px-4 text-xs font-black text-[#64748B] disabled:opacity-50">إعادة المعالجة</button>
+          <button type="button" (click)="saveReview()" [disabled]="saving()" class="h-11 rounded-2xl border border-[#00685F] bg-white px-5 text-sm font-black text-[#004E47] disabled:opacity-50">{{ saving() ? 'جاري الحفظ...' : 'حفظ المراجعة' }}</button>
+          <button type="button" (click)="startStudentPreview()" [disabled]="activities.length === 0" class="h-11 rounded-2xl bg-[#00685F] px-5 text-sm font-black text-white disabled:opacity-50">مراجعة الدرس كطالب</button>
+        </div>
+        <div *ngIf="!isOverview && !isStudentPreview" class="flex flex-wrap gap-2">
+          <button type="button" (click)="saveStageAndReturn()" [disabled]="saving()" class="h-11 rounded-2xl bg-[#00685F] px-5 text-sm font-black text-white disabled:opacity-50">{{ saving() ? 'جاري الحفظ...' : 'حفظ المرحلة والرجوع' }}</button>
+        </div>
+      </header>
+
+      <p *ngIf="saveMessage" class="mb-5 rounded-2xl border border-[#A1F1E5] bg-[#EFFBF8] px-4 py-3 text-sm font-black text-[#004E47]">{{ saveMessage }}</p>
+      <p *ngIf="saveError" class="mb-5 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] px-4 py-3 text-sm font-black text-[#B91C1C]">{{ saveError }}</p>
+
+      <div *ngIf="!isOverview && !isStudentPreview" class="fixed inset-x-0 bottom-0 z-[70] border-t border-[#DCE9FF] bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-12px_30px_rgba(15,23,42,0.12)] backdrop-blur sm:hidden">
+        <button type="button" (click)="saveStageAndReturn()" [disabled]="saving()" class="h-12 w-full rounded-2xl bg-[#00685F] text-sm font-black text-white disabled:opacity-50">{{ saving() ? 'جاري الحفظ...' : 'حفظ التعديلات والرجوع' }}</button>
+      </div>
+
+      <section *ngIf="isOverview" class="mb-6 rounded-xl border border-[#E5EEFF] bg-white p-4 sm:p-5">
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-lg font-black">نتيجة معالجة الدرس</h2>
+            <p class="mt-1 text-xs font-bold text-[#64748B]">هذه نتيجة المعالجة المحفوظة. الدرس معتمد افتراضيًا لكنه غير منشور؛ يمكنك مراجعة أي مرحلة أو جعلها غير معتمدة يدويًا.</p>
+          </div>
+          <span class="rounded-full px-3 py-1 text-xs font-black" [ngClass]="allStagesApproved ? 'bg-[#EAF7E6] text-[#3F8D2B]' : 'bg-[#FFF7E8] text-[#B7791F]'">{{ allStagesApproved ? 'كل المراحل معتمدة' : 'توجد مراحل تحتاج مراجعة' }}</span>
+        </div>
+
+        <div class="grid gap-3">
+          <article *ngFor="let activity of activities; let index = index" class="grid items-center gap-3 rounded-lg border border-[#E5EEFF] bg-white p-4 transition hover:border-[#A1F1E5] sm:grid-cols-[auto_1fr_auto]">
+            <span class="flex items-center justify-between gap-2">
+              <b class="grid h-10 w-10 place-items-center rounded-full bg-[#E6F6F4] text-sm text-[#004E47]">{{ index + 1 }}</b>
+            </span>
+            <button type="button" (click)="openActivity(activity)" class="min-w-0 bg-transparent text-right">
+              <strong class="block text-sm font-black">{{ activity.title }}</strong>
+              <span class="mt-1 block text-[11px] font-bold text-[#64748B]">{{ activityTypeLabel(activity.type) }} <b *ngIf="activity.aiGenerated" class="mr-1 text-[#00685F]">· مقترحة بالذكاء الاصطناعي</b></span>
+              <span class="mt-1 block text-[11px] font-black text-[#004E47]">{{ activitySummary(activity) }}</span>
+              <small class="mt-2 inline-flex rounded-full px-2 py-1 font-black" [ngClass]="activity.reviewStatus === 'approved' ? 'bg-[#EAF7E6] text-[#3F8D2B]' : 'bg-[#FFF7E8] text-[#B7791F]'">{{ activity.reviewStatus === 'approved' ? 'تم حفظ واعتماد المرحلة' : 'افتح المرحلة وأكمل إعدادها' }}</small>
+            </button>
+            <div class="flex flex-wrap justify-end gap-2">
+              <button type="button" (click)="openActivity(activity)" class="h-9 rounded-xl bg-[#00685F] px-3 text-xs font-black text-white">فتح وإعداد</button>
+              <button type="button" (click)="toggleActivityApproval(activity)" [disabled]="saving()" class="h-9 rounded-xl border px-3 text-xs font-black disabled:opacity-50" [ngClass]="activity.reviewStatus === 'approved' ? 'border-[#F5C66A] bg-[#FFF9EE] text-[#B7791F]' : 'border-[#A1F1E5] bg-[#EFFBF8] text-[#004E47]'">{{ activity.reviewStatus === 'approved' ? 'جعل غير معتمد' : 'اعتماد' }}</button>
+              <button *ngIf="index > 1" type="button" (click)="moveActivity(index, -1)" class="h-9 w-9 rounded-xl border border-[#E5EEFF] bg-white text-xs font-black">↑</button>
+              <button *ngIf="index > 0 && index < activities.length - 1" type="button" (click)="moveActivity(index, 1)" class="h-9 w-9 rounded-xl border border-[#E5EEFF] bg-white text-xs font-black">↓</button>
+              <button *ngIf="index > 0" type="button" (click)="removeActivity(index)" class="h-9 rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 text-xs font-black text-[#DC2626]">حذف</button>
+            </div>
+          </article>
+
+          <div class="relative rounded-lg border border-dashed border-[#00685F] bg-[#F8FEFD] p-4">
+            <button type="button" (click)="addMenuOpen = !addMenuOpen" class="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#00685F] px-5 text-sm font-black text-white">
+              <span class="text-xl">+</span><span>إضافة أداة اختيارية بعد {{ activities[activities.length - 1]?.title }}</span><span>⌄</span>
+            </button>
+            <div *ngIf="addMenuOpen" class="absolute inset-x-4 top-[72px] z-30 grid gap-2 rounded-lg border border-[#E5EEFF] bg-white p-3 shadow-[0_20px_50px_rgba(15,23,42,0.18)] sm:grid-cols-2">
+              <button *ngFor="let type of availableActivityTypes" type="button" (click)="addActivity(type)" class="rounded-2xl border border-[#E5EEFF] bg-[#FBFEFD] p-4 text-right transition hover:border-[#00685F] hover:bg-[#EFFBF8]">
+                <strong class="block text-sm font-black">{{ activityTypeLabel(type) }}</strong>
+                <span class="mt-1 block text-[11px] font-bold text-[#64748B]">إنشاء المرحلة ثم فتح صفحة إعدادها</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5 flex flex-col gap-4 rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <strong class="text-sm font-black text-[#004E47]">{{ lessonApproved ? 'الدرس معتمد' : 'الدرس غير معتمد' }}</strong>
+            <p class="mt-1 text-xs font-bold leading-6 text-[#64748B]">بعد المعالجة يكون الدرس معتمدًا تلقائيًا. هذا لا يعني نشره للطلاب؛ النشر يتم لاحقًا من المنهج. استخدم الزر فقط إذا أردت تغيير حالة الاعتماد.</p>
+          </div>
+          <button type="button" (click)="toggleLessonApproval()" [disabled]="saving()" class="h-12 shrink-0 rounded-2xl px-6 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-40" [ngClass]="lessonApproved ? 'bg-[#B7791F]' : 'bg-[#0B1C30]'">{{ lessonApproved ? 'جعل الدرس غير معتمد' : 'اعتماد الدرس' }}</button>
+        </div>
+      </section>
+
+      <section *ngIf="!isOverview && !isStudentPreview && selectedActivity as activity" class="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <article class="rounded-xl border border-[#E5EEFF] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.05)] sm:p-6">
+          <div class="mb-5 flex flex-col gap-3 border-b border-[#E5EEFF] pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <span class="text-xs font-black text-[#004E47]">المرحلة {{ selectedActivityIndex + 1 }}</span>
+              <h2 class="mt-1 text-xl font-black">{{ activity.title }}</h2>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button *ngIf="activity.reviewStatus === 'approved'" type="button" (click)="reopenSelectedActivity()" [disabled]="saving()" class="h-10 rounded-xl border border-[#F5C66A] bg-[#FFF9EE] px-4 text-xs font-black text-[#B7791F] disabled:opacity-50">جعل المرحلة غير معتمدة</button>
+              <button *ngIf="activity.reviewStatus !== 'approved'" type="button" (click)="approveSelectedActivity()" [disabled]="blockingIssues(activity).length > 0 || saving()" class="h-10 rounded-xl bg-[#00685F] px-4 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-40">اعتماد هذه المرحلة</button>
+            </div>
+          </div>
+
+          <div *ngIf="blockingIssues(activity).length > 0" class="mb-5 rounded-2xl border border-[#F5C66A] bg-[#FFF9EE] p-4">
+            <strong class="text-sm font-black text-[#B7791F]">أكمل الآتي قبل الاعتماد:</strong>
+            <ul class="mt-2 grid gap-1 pr-5 text-xs font-bold leading-6 text-[#7C5B1D]">
+              <li *ngFor="let issue of blockingIssues(activity)">{{ issue }}</li>
+            </ul>
+          </div>
+
+          <ng-container *ngIf="activity.type === 'shadowing' || activity.type === 'shadowing-review' || activity.type === 'listen-write'">
+            <div *ngIf="activity.type === 'shadowing' || activity.type === 'shadowing-review'" class="mb-4 rounded-2xl border border-[#C7DDF8] bg-[#F5F9FF] p-4">
+              <label class="grid gap-2 text-xs font-black text-[#475569]">تدقيق كلام الطالب أثناء الشادوينج
+                <select [(ngModel)]="activity.speechReviewMode" (ngModelChange)="markSelectedPending()" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold text-[#111827]">
+                  <option value="student-request">اختياري — الطالب يضغط «دقق كلامي» عندما يريد</option>
+                  <option value="teacher-required">مطلوب من المدرس — يظهر التدقيق تلقائيًا</option>
+                </select>
+              </label>
+              <p class="mt-2 text-xs font-bold leading-6 text-[#64748B]">التدقيق لا يمنع الانتقال بين الجمل. التسجيل يستمر بطبيعته، والتقييم مبني على النص الذي التقطه Speech Recognition وليس حكمًا على اللكنة.</p>
+            </div>
+
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <strong class="text-sm font-black">الجمل المستخدمة</strong>
+                <p class="mt-1 text-xs font-bold text-[#64748B]">راجع النص والترجمة، وحدد الجمل في الشادوينج الثاني و«اسمع واكتب».</p>
+              </div>
+              <div *ngIf="usesSegmentSelection(activity)" class="flex gap-2">
+                <button type="button" (click)="selectAllSegments()" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-3 py-2 text-xs font-black text-[#004E47]">اختيار الكل</button>
+                <button type="button" (click)="clearSelectedSegments()" class="rounded-xl border border-[#E5EEFF] bg-white px-3 py-2 text-xs font-black text-[#64748B]">إلغاء الكل</button>
+              </div>
+            </div>
+
+            <div class="grid gap-3">
+              <article *ngFor="let segment of currentLesson.segments; let segmentIndex = index" class="rounded-lg border p-4" [ngClass]="isSegmentIncluded(segmentIndex) ? 'border-[#A1F1E5] bg-[#FBFEFD]' : 'border-[#E5EEFF] bg-[#F8F9FF] opacity-60'">
+                <div class="flex items-start gap-3">
+                  <label *ngIf="usesSegmentSelection(activity)" class="mt-1 flex shrink-0 items-center gap-2 text-xs font-black text-[#475569]">
+                    <input type="checkbox" [ngModel]="isSegmentIncluded(segmentIndex)" (ngModelChange)="toggleSegment(segmentIndex, $event)" />
+                  </label>
+                  <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#E6F6F4] text-xs font-black text-[#004E47]">{{ segmentIndex + 1 }}</span>
+                  <div class="grid min-w-0 flex-1 gap-3">
+                    <label class="grid gap-1 text-xs font-black text-[#64748B]">النص الإنجليزي
+                      <textarea rows="2" [(ngModel)]="segment.text" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold text-[#111827] outline-none focus:border-[#00685F]"></textarea>
+                    </label>
+                    <label class="grid gap-1 text-xs font-black text-[#64748B]">الترجمة التي ستظهر للطالب
+                      <textarea rows="2" [(ngModel)]="segment.translation" (ngModelChange)="markSelectedPending()" class="rounded-xl border p-3 text-sm font-bold text-[#111827] outline-none focus:border-[#00685F]" [ngClass]="segment.translation?.trim() ? 'border-[#DCE9FF] bg-white' : 'border-[#F5C66A] bg-[#FFF9EE]'" placeholder="أضف الترجمة العربية"></textarea>
+                    </label>
+                    <div *ngIf="activity.type === 'listen-write' && isSegmentIncluded(segmentIndex) && getDictationItem(segmentIndex) as dictation" class="grid gap-3 rounded-2xl border border-[#A1F1E5] bg-white p-3 md:grid-cols-2">
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">الإجابات المقبولة — إجابة في كل سطر
+                        <textarea rows="3" [ngModel]="acceptedAnswersText(dictation)" (ngModelChange)="updateAcceptedAnswers(dictation, $event)" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                      </label>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">التلميح الجزئي عند الخطأ
+                        <textarea rows="3" [(ngModel)]="dictation.hint" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                      </label>
+                    </div>
+                    <small class="font-bold text-[#64748B]">{{ segment.start | number:'1.1-1' }}s — {{ segment.end | number:'1.1-1' }}s</small>
+                  </div>
+                </div>
+              </article>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#F8F9FF] p-4">
+              <span class="text-xs font-black" [ngClass]="missingTranslationCount(activity) > 0 ? 'text-[#B7791F]' : 'text-[#3F8D2B]'">{{ missingTranslationCount(activity) }} جمل مختارة بدون ترجمة</span>
+              <a [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: currentLesson.id }" class="text-xs font-black text-[#004E47] no-underline">إضافة/حذف جملة أو تعديل التوقيت من الـBuilder</a>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'vocabulary'">
+            <div *ngIf="aiStatus as status; else aiStatusUnavailable" class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4" [ngClass]="status.images.state === 'available' ? 'border-[#BBE3B0] bg-[#F3FAF1]' : status.images.state === 'unavailable' || status.images.state === 'not-configured' ? 'border-[#FECACA] bg-[#FEF2F2]' : 'border-[#C7DDF8] bg-[#F5F9FF]'">
+              <div>
+                <strong class="text-sm font-black">حالة تجهيز الصور</strong>
+                <p class="mt-1 text-xs font-bold leading-6 text-[#64748B]">{{ status.images.message }}</p>
+              </div>
+              <button type="button" (click)="refreshAiStatus(true)" [disabled]="checkingAiStatus()" class="rounded-xl border border-[#8B5CF6] bg-white px-4 py-2 text-xs font-black text-[#6D28D9] disabled:opacity-50">{{ checkingAiStatus() ? 'جاري الفحص...' : 'إعادة الفحص' }}</button>
+            </div>
+            <ng-template #aiStatusUnavailable>
+              <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-4">
+                <span class="text-xs font-black leading-6 text-[#B91C1C]">{{ aiStatusError || 'جارٍ قراءة إعدادات الذكاء الاصطناعي...' }}</span>
+                <button type="button" (click)="refreshAiStatus(true)" [disabled]="checkingAiStatus()" class="rounded-xl bg-[#B91C1C] px-4 py-2 text-xs font-black text-white disabled:opacity-50">إعادة الفحص</button>
+              </div>
+            </ng-template>
+
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <strong class="text-sm font-black">معالجة الكلمات وChunks والصور</strong>
+                <p class="mt-1 text-xs font-bold text-[#64748B]">{{ visibleWordCount }} كلمات · {{ visibleChunkCount }} Chunks. الكلمات والصور الناتجة تعتبر معتمدة افتراضيًا؛ غيّر أو احذف فقط ما لا يعجبك.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" (click)="prepareVocabularyFromLesson()" [disabled]="currentLesson.segments.length === 0" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-4 py-2 text-xs font-black text-[#004E47] disabled:opacity-40">تجهيز من جمل الدرس</button>
+                <button type="button" (click)="generateMissingVocabularyImages()" [disabled]="generatingAllImages() || visibleVocabulary.length === 0" class="rounded-xl border border-[#8B5CF6] bg-[#F5F3FF] px-4 py-2 text-xs font-black text-[#6D28D9] disabled:opacity-40">{{ generatingAllImages() ? 'جاري توليد الصور...' : 'توليد كل الصور بالذكاء الاصطناعي' }}</button>
+                <button type="button" (click)="addVocabulary()" class="rounded-xl bg-[#00685F] px-4 py-2 text-xs font-black text-white">إضافة كلمة يدويًا</button>
+              </div>
+            </div>
+
+            <div *ngIf="vocabulary.length === 0" class="rounded-2xl border border-dashed border-[#A1F1E5] bg-[#F8FEFD] p-8 text-center text-sm font-black text-[#64748B]">لا توجد كلمات بعد. اضغط «تجهيز من جمل الدرس» لعمل قائمة أولية، ثم قرر ما يظهر للطالب.</div>
+
+            <div class="grid gap-4">
+              <article *ngFor="let item of vocabulary; let itemIndex = index" class="rounded-xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
+                <div class="mb-3 flex items-center justify-between gap-3">
+                  <div class="flex items-center gap-2">
+                    <strong class="text-sm font-black">العنصر {{ itemIndex + 1 }}</strong>
+                    <span class="rounded-full px-2 py-1 text-[10px] font-black" [ngClass]="item.kind === 'chunk' ? 'bg-[#EDE9FE] text-[#6D28D9]' : 'bg-[#DBEAFE] text-[#1D4ED8]'">{{ item.kind === 'chunk' ? 'CHUNK' : 'WORD' }}</span>
+                  </div>
+                  <button type="button" (click)="removeVocabulary(itemIndex)" class="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-black text-[#DC2626]">حذف العنصر</button>
+                </div>
+                <div class="grid gap-3 md:grid-cols-[180px_1fr_1fr]">
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">النوع
+                    <select [(ngModel)]="item.kind" (ngModelChange)="markSelectedPending()" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold">
+                      <option value="word">كلمة</option>
+                      <option value="chunk">Chunk / تعبير جاهز</option>
+                    </select>
+                  </label>
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">الكلمة أو التعبير
+                    <input [(ngModel)]="item.term" (ngModelChange)="markSelectedPending()" dir="ltr" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold" />
+                  </label>
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">المعنى بالعربية
+                    <input [(ngModel)]="item.translation" (ngModelChange)="markSelectedPending()" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold" />
+                  </label>
+                </div>
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">شرح إنجليزي بسيط للطالب
+                    <textarea rows="3" [(ngModel)]="item.explanation" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold" placeholder="A simple explanation suitable for the learner level."></textarea>
+                  </label>
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">مثال من الدرس
+                    <textarea rows="3" [(ngModel)]="item.example" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                  </label>
+                </div>
+
+                <div class="mt-3 grid gap-3 md:grid-cols-2">
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">مثال إضافي طبيعي
+                    <textarea rows="3" [(ngModel)]="item.extraExample" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                  </label>
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">متى يستخدمها الطالب؟
+                    <textarea rows="3" [(ngModel)]="item.usageNote" (ngModelChange)="markSelectedPending()" dir="ltr" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                  </label>
+                </div>
+
+                <div class="mt-3 rounded-2xl border border-[#A1F1E5] bg-white p-3">
+                  <div class="flex flex-wrap items-center justify-between gap-2">
+                    <strong class="text-xs font-black text-[#004E47]">اقتراح الذكاء الاصطناعي للصورة</strong>
+                    <div class="flex items-center gap-2">
+                      <span class="rounded-full bg-[#E6F6F4] px-2 py-1 text-[10px] font-black text-[#004E47]">ثقة الاقتراح {{ aiConfidencePercent(item) }}%</span>
+                      <span *ngIf="item.imageProvider" class="rounded-full bg-[#F1F5F9] px-2 py-1 text-[10px] font-black text-[#64748B]">{{ item.imageProvider === 'ai' ? 'صورة AI قديمة' : item.imageProvider === 'curated' ? 'صورة من Pexels' : item.imageProvider === 'teacher' ? 'اختيار المدرس' : 'Placeholder قديم — لن يظهر للطالب' }}</span>
+                    </div>
+                  </div>
+                  <textarea rows="2" [(ngModel)]="item.imagePrompt" (ngModelChange)="markSelectedPending()" dir="ltr" class="mt-2 w-full rounded-xl border border-[#DCE9FF] bg-[#FBFEFD] p-3 text-xs font-bold" placeholder="Image generation/search prompt"></textarea>
+                  <label class="mt-2 grid gap-1 text-xs font-black text-[#64748B]">وصف الصورة ومعناها للطالب
+                    <input [(ngModel)]="item.imageAlt" (ngModelChange)="markSelectedPending()" class="h-10 rounded-xl border border-[#DCE9FF] bg-white px-3 text-xs font-bold" />
+                  </label>
+                </div>
+
+                <div *ngIf="getVocabularyHistory(item) as history" class="mt-3 rounded-xl px-3 py-2 text-xs font-black" [ngClass]="history.length ? 'bg-[#FFF7E8] text-[#B7791F]' : 'bg-[#EAF7E6] text-[#3F8D2B]'">
+                  {{ history.length ? 'ظهرت قبل كده في: ' + history.join('، ') : 'كلمة جديدة في بنك الدروس' }}
+                </div>
+
+                <label class="mt-3 grid gap-1 text-xs font-black text-[#64748B]">رابط الصورة — اختياري
+                  <input [(ngModel)]="item.imageUrl" (ngModelChange)="item.imageApproved = false; item.imageProvider = 'teacher'; markSelectedPending()" dir="ltr" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold" />
+                </label>
+                <div *ngIf="item.imageUrl?.trim()" class="mt-3 grid gap-3 rounded-2xl border border-[#E5EEFF] bg-white p-3 sm:grid-cols-[120px_1fr]">
+                  <div>
+                    <img [src]="item.imageUrl" [alt]="item.imageAlt || item.term" class="h-[110px] w-full rounded-xl object-cover" />
+                    <a *ngIf="item.imageProvider === 'curated'" href="https://www.pexels.com" target="_blank" rel="noopener" class="mt-1 inline-block text-[10px] font-black text-[#004E47] underline">Photos provided by Pexels</a>
+                  </div>
+                  <div>
+                    <strong class="text-sm font-black" [ngClass]="item.imageApproved ? 'text-[#3F8D2B]' : 'text-[#B7791F]'">{{ item.imageApproved ? 'الصورة معتمدة' : 'الصورة غير معتمدة' }}</strong>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                      <button type="button" (click)="approveImage(item)" class="rounded-xl bg-[#00685F] px-3 py-2 text-xs font-black text-white">اعتماد الصورة</button>
+                      <button type="button" (click)="generateVocabularyImage(item)" [disabled]="isGeneratingImage(item)" class="rounded-xl border border-[#8B5CF6] bg-[#F5F3FF] px-3 py-2 text-xs font-black text-[#6D28D9] disabled:opacity-50">{{ isGeneratingImage(item) ? 'جاري التوليد...' : 'ولّد صورة أخرى بالذكاء الاصطناعي' }}</button>
+                      <button type="button" (click)="searchImage(item)" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-3 py-2 text-xs font-black text-[#004E47]">ابحث عن بديل</button>
+                      <button type="button" (click)="removeImage(item)" class="rounded-xl border border-[#E5EEFF] bg-white px-3 py-2 text-xs font-black text-[#64748B]">حذف الصورة فقط</button>
+                    </div>
+                  </div>
+                </div>
+                <div *ngIf="!item.imageUrl?.trim()" class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-dashed border-[#DCE9FF] bg-white p-3">
+                  <span class="text-xs font-bold text-[#64748B]">لم تُضف صورة. يمكنك إبقاء الكلمة بدون صورة أو البحث عن صورة مناسبة.</span>
+                  <div class="flex flex-wrap gap-2">
+                    <button type="button" (click)="generateVocabularyImage(item)" [disabled]="isGeneratingImage(item)" class="rounded-xl bg-[#8B5CF6] px-3 py-2 text-xs font-black text-white disabled:opacity-50">{{ isGeneratingImage(item) ? 'جاري التوليد...' : 'توليد صورة بالذكاء الاصطناعي' }}</button>
+                    <button type="button" (click)="searchImage(item)" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-3 py-2 text-xs font-black text-[#004E47]">ابحث عن صورة</button>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                  <label class="flex items-center gap-2 rounded-xl border border-[#E5EEFF] bg-white p-3 text-xs font-black"><input type="checkbox" [ngModel]="item.includeForStudent !== false" (ngModelChange)="setVocabularyVisible(item, $event)" /> تظهر للطالب</label>
+                  <label class="flex items-center gap-2 rounded-xl border border-[#E5EEFF] bg-white p-3 text-xs font-black"><input type="checkbox" [(ngModel)]="item.repeatForReview" (ngModelChange)="markSelectedPending()" /> مراجعة مرة أخرى</label>
+                  <label class="flex items-center gap-2 rounded-xl border border-[#E5EEFF] bg-white p-3 text-xs font-black"><input type="checkbox" [(ngModel)]="item.testLater" (ngModelChange)="markSelectedPending()" /> اختبار مستقبلي</label>
+                </div>
+              </article>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'quiz'">
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <strong class="text-sm font-black">أسئلة اختبار الدرس</strong>
+                <p class="mt-1 text-xs font-bold text-[#64748B]">الذكاء الاصطناعي يقترح الأسئلة من محتوى الدرس، وأنت تحدد ما سيظهر للطالب.</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" (click)="addQuizQuestion('multiple-choice')" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-3 py-2 text-xs font-black text-[#004E47]">+ اختيار متعدد</button>
+                <button type="button" (click)="addQuizQuestion('word-order')" class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] px-3 py-2 text-xs font-black text-[#004E47]">+ ترتيب كلمات</button>
+                <button type="button" (click)="addQuizQuestion('vocabulary-card')" class="rounded-xl bg-[#00685F] px-3 py-2 text-xs font-black text-white">+ اختبار كلمة</button>
+              </div>
+            </div>
+
+            <div *ngIf="!activity.quizQuestions?.length" class="rounded-2xl border border-dashed border-[#A1F1E5] bg-[#F8FEFD] p-8 text-center text-sm font-black text-[#64748B]">لا توجد أسئلة. أضف سؤالًا واحدًا على الأقل قبل اعتماد المرحلة.</div>
+
+            <div class="grid gap-4">
+              <article *ngFor="let question of activity.quizQuestions; let questionIndex = index" class="rounded-xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+                  <label class="flex items-center gap-2 text-sm font-black"><input type="checkbox" [(ngModel)]="question.enabled" (ngModelChange)="markSelectedPending()" /> السؤال {{ questionIndex + 1 }} يظهر للطالب</label>
+                  <button type="button" (click)="removeQuizQuestion(questionIndex)" class="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-black text-[#DC2626]">حذف السؤال</button>
+                </div>
+
+                <div class="grid gap-3 md:grid-cols-[220px_1fr]">
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">نوع السؤال
+                    <select [ngModel]="question.type" (ngModelChange)="setQuizQuestionType(question, $event)" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold">
+                      <option value="multiple-choice">اختيار من متعدد</option>
+                      <option value="word-order">ترتيب كلمات</option>
+                      <option value="vocabulary-card">اختبار كلمة</option>
+                    </select>
+                  </label>
+                  <label class="grid gap-1 text-xs font-black text-[#64748B]">السؤال أو التعليمات
+                    <input [(ngModel)]="question.prompt" (ngModelChange)="markSelectedPending()" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold" />
+                  </label>
+                </div>
+
+                <label class="mt-3 grid gap-1 text-xs font-black text-[#64748B]">الإجابة الصحيحة
+                  <input [(ngModel)]="question.correctAnswer" (ngModelChange)="markSelectedPending()" dir="auto" class="h-11 rounded-xl border border-[#DCE9FF] bg-white px-3 text-sm font-bold" />
+                </label>
+
+                <div class="mt-3 rounded-2xl border border-[#E5EEFF] bg-white p-3">
+                  <div class="mb-2 flex items-center justify-between gap-2">
+                    <strong class="text-xs font-black">{{ question.type === 'word-order' ? 'الكلمات المختلطة التي يرتبها الطالب' : 'الاختيارات' }}</strong>
+                    <button type="button" (click)="addQuizOption(question)" class="rounded-lg bg-[#E6F6F4] px-2 py-1 text-[10px] font-black text-[#004E47]">+ إضافة</button>
+                  </div>
+                  <div class="grid gap-2 sm:grid-cols-2">
+                    <label *ngFor="let option of question.options; let optionIndex = index" class="flex items-center gap-2">
+                      <input [(ngModel)]="question.options[optionIndex]" (ngModelChange)="markSelectedPending()" dir="auto" class="h-10 min-w-0 flex-1 rounded-xl border border-[#DCE9FF] px-3 text-xs font-bold" />
+                      <button type="button" (click)="removeQuizOption(question, optionIndex)" class="h-9 w-9 shrink-0 rounded-xl border border-[#FECACA] bg-[#FEF2F2] text-xs font-black text-[#DC2626]">×</button>
+                    </label>
+                  </div>
+                </div>
+
+                <label class="mt-3 grid gap-1 text-xs font-black text-[#64748B]">شرح يظهر بعد الإجابة
+                  <textarea rows="2" [(ngModel)]="question.feedback" (ngModelChange)="markSelectedPending()" class="rounded-xl border border-[#DCE9FF] bg-white p-3 text-sm font-bold"></textarea>
+                </label>
+              </article>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'ai-conversation'">
+            <div *ngIf="aiStatus as status" class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border p-4" [ngClass]="status.conversation.state === 'available' ? 'border-[#BBE3B0] bg-[#F3FAF1]' : status.conversation.state === 'unavailable' || status.conversation.state === 'not-configured' ? 'border-[#FECACA] bg-[#FEF2F2]' : 'border-[#C7DDF8] bg-[#F5F9FF]'">
+              <div>
+                <strong class="text-sm font-black">حالة محادثة الطالب</strong>
+                <p class="mt-1 text-xs font-bold leading-6 text-[#64748B]">{{ status.conversation.message }} لن يستخدم الطالب ردودًا محلية محفوظة إذا فشل الاتصال.</p>
+              </div>
+              <button type="button" (click)="refreshAiStatus(true)" [disabled]="checkingAiStatus()" class="rounded-xl border border-[#00685F] bg-white px-4 py-2 text-xs font-black text-[#004E47] disabled:opacity-50">{{ checkingAiStatus() ? 'جاري الفحص...' : 'إعادة الفحص' }}</button>
+            </div>
+
+            <div *ngIf="selectedConversationConfig as config" class="grid gap-4">
+              <div class="rounded-2xl border border-[#8B5CF6] bg-[#F5F3FF] p-4">
+                <strong class="text-sm font-black text-[#5B21B6]">فهم محتوى الدرس وتحويله لتدريب كلام</strong>
+                <p class="mt-1 text-xs font-bold leading-6 text-[#6D28D9]">الجمل ليست محادثة جاهزة بالضرورة. النظام يستخرج الموضوع ثم يبني Role‑play أو مناقشة حقيقية ويستخدم كلمات وChunks الدرس في التصحيح.</p>
+              </div>
+              <label class="grid gap-2 text-sm font-black text-[#475569]">اسم المرحلة
+                <input [(ngModel)]="activity.title" (ngModelChange)="markSelectedPending()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold text-[#111827]" />
+              </label>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="grid gap-2 text-sm font-black text-[#475569]">نوع الدرس الذي تم فهمه
+                  <select [(ngModel)]="config.lessonType" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold">
+                    <option value="call-center">Call Center</option>
+                    <option value="youtube">YouTube / Podcast</option>
+                    <option value="book">موقف من كتاب</option>
+                    <option value="general">موضوع عام</option>
+                  </select>
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">موضوع المحادثة
+                  <input [(ngModel)]="config.topic" (ngModelChange)="updateConversationConfig()" dir="auto" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold" placeholder="Account verification / Weather" />
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">طريقة التدريب
+                  <select [(ngModel)]="config.mode" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold">
+                    <option value="role-play">Role‑play بأدوار</option>
+                    <option value="guided-discussion">مناقشة بأسئلة متدرجة</option>
+                  </select>
+                </label>
+              </div>
+              <label class="grid gap-2 text-sm font-black text-[#475569]">سيناريو المحادثة
+                <textarea rows="4" [(ngModel)]="config.scenario" (ngModelChange)="updateConversationConfig()" class="rounded-2xl border border-[#DCE9FF] bg-white p-4 text-sm font-bold leading-7 text-[#111827]" placeholder="مثال: الطالب عميل يتصل بخدمة العملاء، والذكاء الاصطناعي موظف الدعم..."></textarea>
+              </label>
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="grid gap-2 text-sm font-black text-[#475569]">دور الذكاء الاصطناعي
+                  <input [(ngModel)]="config.aiRole" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold" />
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">دور الطالب
+                  <input [(ngModel)]="config.studentRole" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold" />
+                </label>
+              </div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="grid gap-2 text-sm font-black text-[#475569]">المستوى
+                  <select [(ngModel)]="config.level" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold"><option value="A1">A1</option><option value="A2">A2</option><option value="B1">B1</option></select>
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">عدد الجولات
+                  <input type="number" [value]="10" readonly class="h-12 rounded-2xl border border-[#DCE9FF] bg-[#F8FAFC] px-4 text-sm font-bold text-[#64748B]" />
+                  <small class="text-[11px] text-[#64748B]">قاعدة ثابتة حاليًا: 10 ردود مقبولة، وإعادة المحاولة لا تُحسب.</small>
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">أسلوب التصحيح
+                  <select [(ngModel)]="config.feedbackStyle" (ngModelChange)="updateConversationConfig()" class="h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-sm font-bold"><option value="supportive">مشجّع</option><option value="balanced">متوازن</option><option value="detailed">مفصّل</option></select>
+                </label>
+              </div>
+              <div class="grid gap-2 text-sm font-black text-[#475569]">التصحيح
+                <div class="rounded-2xl border border-[#DCE9FF] bg-[#F8FAFC] p-4 text-sm leading-7 text-[#475569]">
+                  بعد كل رد: تصحيح الكلمات والجرامر، ثم في نهاية الجولة العاشرة تقرير بالقواعد والكلمات ونقاط القوة.
+                </div>
+              </div>
+              <label class="grid gap-2 text-sm font-black text-[#475569]">رسالة بداية المحادثة
+                <textarea rows="2" [(ngModel)]="config.openingMessage" (ngModelChange)="updateConversationConfig()" dir="ltr" class="rounded-2xl border border-[#DCE9FF] bg-white p-4 text-sm font-bold"></textarea>
+              </label>
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="grid gap-2 text-sm font-black text-[#475569]">أهداف المحادثة — هدف في كل سطر
+                  <textarea rows="4" [ngModel]="linesText(config.goals)" (ngModelChange)="updateConversationGoals($event)" class="rounded-2xl border border-[#DCE9FF] bg-white p-4 text-sm font-bold"></textarea>
+                </label>
+                <label class="grid gap-2 text-sm font-black text-[#475569]">الجمل المستهدفة — جملة في كل سطر
+                  <textarea rows="4" [ngModel]="linesText(config.targetPhrases)" (ngModelChange)="updateConversationPhrases($event)" dir="ltr" class="rounded-2xl border border-[#DCE9FF] bg-white p-4 text-sm font-bold"></textarea>
+                </label>
+              </div>
+              <button type="button" (click)="syncConversationPhrasesFromVocabulary()" class="w-fit rounded-xl border border-[#8B5CF6] bg-[#F5F3FF] px-4 py-2 text-xs font-black text-[#6D28D9]">تحديث الجمل المستهدفة من الكلمات والـChunks الظاهرة للطالب</button>
+              <section *ngIf="config.mode === 'role-play'" class="rounded-xl border border-[#DCE9FF] bg-[#F8F9FF] p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <strong class="text-sm font-black">الأدوار التي يختار منها الطالب</strong>
+                    <p class="mt-1 text-xs font-bold text-[#64748B]">في درس Call Center مثلًا: الطالب يختار Agent أو Customer، والذكاء الاصطناعي يأخذ الدور المقابل.</p>
+                  </div>
+                  <button type="button" (click)="addConversationRole()" class="rounded-xl bg-[#8B5CF6] px-3 py-2 text-xs font-black text-white">+ إضافة دور</button>
+                </div>
+                <label class="mt-3 flex items-center gap-2 text-xs font-black text-[#475569]"><input type="checkbox" [(ngModel)]="config.allowRoleChoice" (ngModelChange)="updateConversationConfig()" /> اسمح للطالب باختيار دوره قبل البداية</label>
+                <div class="mt-4 grid gap-3">
+                  <article *ngFor="let role of config.roleOptions; let roleIndex = index" class="rounded-2xl border border-[#E5EEFF] bg-white p-4">
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">اسم الاختيار للطالب<input [(ngModel)]="role.label" (ngModelChange)="updateConversationConfig()" class="h-10 rounded-xl border border-[#DCE9FF] px-3 text-sm font-bold" /></label>
+                      <div class="flex justify-end"><button type="button" (click)="removeConversationRole(roleIndex)" class="rounded-xl border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-black text-[#DC2626]">حذف الدور</button></div>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">دور الطالب<input [(ngModel)]="role.studentRole" (ngModelChange)="updateConversationConfig()" dir="ltr" class="h-10 rounded-xl border border-[#DCE9FF] px-3 text-sm font-bold" /></label>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">دور الذكاء الاصطناعي<input [(ngModel)]="role.aiRole" (ngModelChange)="updateConversationConfig()" dir="ltr" class="h-10 rounded-xl border border-[#DCE9FF] px-3 text-sm font-bold" /></label>
+                    </div>
+                    <label class="mt-3 grid gap-1 text-xs font-black text-[#64748B]">أول رسالة يقولها الذكاء الاصطناعي<textarea rows="2" [(ngModel)]="role.openingMessage" (ngModelChange)="updateConversationConfig()" dir="ltr" class="rounded-xl border border-[#DCE9FF] p-3 text-sm font-bold"></textarea></label>
+                  </article>
+                </div>
+              </section>
+
+              <section class="rounded-xl border border-[#DCE9FF] bg-[#F8F9FF] p-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                  <div><strong class="text-sm font-black">خريطة المحادثة</strong><p class="mt-1 text-xs font-bold text-[#64748B]">كل خطوة هدف للموقف وليست جملة محفوظة؛ الذكاء الاصطناعي يغيّر كلامه حسب رد الطالب.</p></div>
+                  <button type="button" (click)="addConversationTurn()" class="rounded-xl bg-[#00685F] px-3 py-2 text-xs font-black text-white">+ إضافة خطوة</button>
+                </div>
+                <div class="mt-4 grid gap-3">
+                  <article *ngFor="let turn of config.turnPlan; let turnIndex = index" class="rounded-2xl border border-[#E5EEFF] bg-white p-4">
+                    <div class="mb-3 flex items-center justify-between"><strong class="text-xs font-black text-[#004E47]">الجولة {{ turnIndex + 1 }}</strong><button type="button" (click)="removeConversationTurn(turnIndex)" class="text-xs font-black text-[#DC2626]">حذف</button></div>
+                    <div class="grid gap-3 md:grid-cols-2">
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">هدف الجولة<input [(ngModel)]="turn.goal" (ngModelChange)="updateConversationConfig()" class="h-10 rounded-xl border border-[#DCE9FF] px-3 text-sm font-bold" /></label>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">كيف يتصرف AI؟<input [(ngModel)]="turn.aiPrompt" (ngModelChange)="updateConversationConfig()" class="h-10 rounded-xl border border-[#DCE9FF] px-3 text-sm font-bold" /></label>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">وظائف الرد المتوقعة — سطر لكل وظيفة<textarea rows="2" [ngModel]="linesText(turn.expectedFunctions)" (ngModelChange)="updateConversationTurnFunctions(turnIndex, $event)" dir="ltr" class="rounded-xl border border-[#DCE9FF] p-3 text-xs font-bold"></textarea></label>
+                      <label class="grid gap-1 text-xs font-black text-[#64748B]">Chunks مقترحة لهذه الجولة — سطر لكل Chunk<textarea rows="2" [ngModel]="linesText(turn.targetPhrases)" (ngModelChange)="updateConversationTurnPhrases(turnIndex, $event)" dir="ltr" class="rounded-xl border border-[#DCE9FF] p-3 text-xs font-bold"></textarea></label>
+                    </div>
+                  </article>
+                </div>
+              </section>
+              <label class="flex items-center gap-3 rounded-2xl border border-[#A1F1E5] bg-[#EFFBF8] p-4 text-sm font-black text-[#004E47]"><input type="checkbox" [(ngModel)]="config.lessonContentOnly" (ngModelChange)="updateConversationConfig()" /> لا تسمح للمحادثة بالخروج عن محتوى الدرس المعتمد</label>
+              <p class="rounded-xl border border-[#A1F1E5] bg-[#EFFBF8] p-4 text-xs font-bold leading-6 text-[#004E47]">هذه المرحلة تعرض نتيجة المعالجة المحفوظة فقط. عدّل المحتوى الذي يحتاج مراجعة، ثم احفظ التغييرات قبل النشر.</p>
+            </div>
+          </ng-container>
+        </article>
+
+        <aside class="sticky top-5 rounded-xl border border-[#A1F1E5] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.07)]">
+          <span class="text-xs font-black text-[#004E47]">معاينة ما سيراه الطالب</span>
+          <h2 class="mt-1 text-lg font-black">{{ activity.title }}</h2>
+
+          <ng-container *ngIf="activity.type === 'shadowing' || activity.type === 'shadowing-review'">
+            <div class="my-5 rounded-xl bg-[#0F172A] p-5 text-center text-white">
+              <span class="text-3xl">🎧</span>
+              <strong class="mt-3 block text-sm">{{ selectedSegments[0]?.segment?.text || 'لا توجد جمل مختارة' }}</strong>
+              <span class="mt-2 block text-xs text-[#CBD5E1]">{{ selectedSegments[0]?.segment?.translation || 'لا توجد ترجمة' }}</span>
+            </div>
+            <a [routerLink]="[contentBasePath + '/lessons', currentLesson.id, 'preview-shadowing', activity.id]" class="flex h-11 items-center justify-center rounded-2xl bg-[#00685F] text-sm font-black text-white no-underline">تجربة الشادوينج القديم بالكامل</a>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'vocabulary'">
+            <div *ngIf="vocabularyPreview as card; else noVisibleVocabulary" class="my-5 overflow-hidden rounded-xl border border-[#E5EEFF] bg-[#FBFEFD] text-center">
+              <img *ngIf="card.imageUrl && card.imageApproved" [src]="card.imageUrl" [alt]="card.term" class="h-44 w-full object-cover" />
+              <div class="p-5">
+                <span class="text-xs font-black text-[#64748B]">{{ vocabularyPreviewIndex + 1 }} / {{ visibleVocabulary.length }}</span>
+                <span class="mr-2 rounded-full bg-[#EDE9FE] px-2 py-1 text-[10px] font-black text-[#6D28D9]">{{ card.kind === 'chunk' ? 'CHUNK' : 'WORD' }}</span>
+                <strong class="mt-3 block text-2xl font-black" dir="ltr">{{ card.term }}</strong>
+                <span class="mt-2 block text-sm font-black text-[#004E47]">{{ card.translation }}</span>
+                <p *ngIf="card.explanation" class="mt-3 text-xs font-bold leading-6 text-[#475569]" dir="ltr">{{ card.explanation }}</p>
+                <p class="mt-3 text-xs font-bold leading-6 text-[#64748B]" dir="ltr">{{ card.example }}</p>
+                <p *ngIf="card.extraExample" class="mt-2 text-xs font-bold leading-6 text-[#64748B]" dir="ltr">Extra: {{ card.extraExample }}</p>
+              </div>
+            </div>
+            <ng-template #noVisibleVocabulary><div class="my-5 rounded-2xl bg-[#F8F9FF] p-6 text-center text-xs font-black text-[#64748B]">لا توجد كلمات مفعلة للطالب.</div></ng-template>
+            <div class="grid grid-cols-2 gap-2">
+              <button type="button" (click)="previousVocabularyPreview()" [disabled]="vocabularyPreviewIndex === 0" class="h-10 rounded-xl border border-[#E5EEFF] bg-white text-xs font-black disabled:opacity-40">السابق</button>
+              <button type="button" (click)="nextVocabularyPreview()" [disabled]="vocabularyPreviewIndex >= visibleVocabulary.length - 1" class="h-10 rounded-xl bg-[#00685F] text-xs font-black text-white disabled:opacity-40">التالي</button>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'listen-write'">
+            <div class="my-5 rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-5 text-center">
+              <span class="text-4xl">🎧</span>
+              <strong class="mt-4 block text-sm font-black">اسمع الجملة ثم اكتبها</strong>
+              <textarea rows="3" disabled class="mt-4 w-full rounded-xl border border-[#DCE9FF] bg-white p-3" placeholder="الطالب يكتب هنا..."></textarea>
+              <small class="mt-3 block font-bold text-[#64748B]">{{ selectedSegments.length }} جمل داخل الاختبار</small>
+            </div>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'quiz'">
+            <div *ngIf="selectedQuizQuestions[0] as question; else noQuizPreview" class="my-5 rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-4">
+              <span class="text-[10px] font-black text-[#004E47]">{{ quizTypeLabel(question.type) }}</span>
+              <strong class="mt-3 block text-sm font-black leading-7">{{ question.prompt }}</strong>
+              <div class="mt-3 grid gap-2">
+                <span *ngFor="let option of question.options; let optionIndex = index" class="rounded-xl border border-[#E5EEFF] bg-white px-3 py-2 text-xs font-bold" dir="auto">{{ optionIndex + 1 }} · {{ option }}</span>
+              </div>
+              <small class="mt-3 block font-black text-[#64748B]">{{ selectedQuizQuestions.length }} أسئلة معتمدة للطالب</small>
+            </div>
+            <ng-template #noQuizPreview><div class="my-5 rounded-2xl bg-[#F8F9FF] p-6 text-center text-xs font-black text-[#64748B]">لا توجد أسئلة مفعلة.</div></ng-template>
+          </ng-container>
+
+          <ng-container *ngIf="activity.type === 'ai-conversation'">
+            <div class="my-5 grid gap-3 rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-4">
+              <span *ngIf="selectedConversationConfig as config" class="rounded-xl bg-[#E6F6F4] p-3 text-xs font-black leading-6 text-[#004E47]">{{ config.scenario }}</span>
+              <div class="ml-8 rounded-2xl bg-white p-3 text-xs font-bold leading-6" dir="ltr">{{ selectedConversationConfig?.openingMessage || 'Let\'s practise this lesson together. How would you reply?' }}</div>
+              <div class="mr-8 rounded-2xl bg-[#00685F] p-3 text-xs font-bold text-white" dir="ltr">The student's answer appears here.</div>
+              <small class="font-black text-[#64748B]">10 جولات ثابتة · التصحيح بعد كل رد</small>
+            </div>
+          </ng-container>
+        </aside>
+      </section>
+
+      <section *ngIf="isStudentPreview && previewActivity as activity" class="mx-auto max-w-[920px] rounded-[30px] border border-[#A1F1E5] bg-white p-5 shadow-[0_20px_55px_rgba(15,23,42,0.08)] sm:p-8">
+        <div class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-[#E5EEFF] pb-5">
+          <div>
+            <span class="text-xs font-black text-[#004E47]">معاينة الطالب — المرحلة {{ previewIndex + 1 }} من {{ activities.length }}</span>
+            <h2 class="mt-2 text-2xl font-black">{{ activity.title }}</h2>
+          </div>
+          <span class="rounded-full bg-[#EFFBF8] px-4 py-2 text-xs font-black text-[#004E47]">لا تُسجّل تقدمًا حقيقيًا</span>
+        </div>
+
+        <ng-container *ngIf="activity.type === 'vocabulary'">
+          <div *ngIf="vocabularyPreview as card; else noVocabularyInStudentPreview" class="mx-auto max-w-[560px] overflow-hidden rounded-xl border border-[#E5EEFF] bg-[#FBFEFD] text-center">
+            <img *ngIf="card.imageUrl && card.imageApproved" [src]="card.imageUrl" [alt]="card.term" class="h-64 w-full object-cover" />
+            <div class="p-7">
+              <span class="text-xs font-black text-[#64748B]">{{ vocabularyPreviewIndex + 1 }} / {{ visibleVocabulary.length }}</span>
+              <span class="mr-2 rounded-full bg-[#EDE9FE] px-2 py-1 text-[10px] font-black text-[#6D28D9]">{{ card.kind === 'chunk' ? 'CHUNK' : 'WORD' }}</span>
+              <strong class="mt-4 block text-4xl font-black" dir="ltr">{{ card.term }}</strong>
+              <span class="mt-3 block text-lg font-black text-[#004E47]">{{ card.translation }}</span>
+              <p *ngIf="card.explanation" class="mt-4 text-sm font-bold leading-7 text-[#475569]" dir="ltr">{{ card.explanation }}</p>
+              <p class="mt-4 text-sm font-bold leading-7 text-[#64748B]" dir="ltr">{{ card.example }}</p>
+              <p *ngIf="card.extraExample" class="mt-2 text-sm font-bold leading-7 text-[#64748B]" dir="ltr">Extra: {{ card.extraExample }}</p>
+            </div>
+          </div>
+          <ng-template #noVocabularyInStudentPreview><div class="rounded-2xl bg-[#F8F9FF] p-10 text-center text-sm font-black text-[#64748B]">لا توجد كلمات معتمدة لتظهر للطالب.</div></ng-template>
+          <div *ngIf="visibleVocabulary.length > 0" class="mx-auto mt-4 grid max-w-[560px] grid-cols-2 gap-3">
+            <button type="button" (click)="previousVocabularyPreview()" [disabled]="vocabularyPreviewIndex === 0" class="h-11 rounded-xl border border-[#E5EEFF] bg-white text-xs font-black disabled:opacity-40">الكلمة السابقة</button>
+            <button type="button" (click)="nextVocabularyPreview()" [disabled]="vocabularyPreviewIndex >= visibleVocabulary.length - 1" class="h-11 rounded-xl bg-[#00685F] text-xs font-black text-white disabled:opacity-40">الكلمة التالية</button>
+          </div>
+        </ng-container>
+
+        <ng-container *ngIf="activity.type === 'listen-write'">
+          <div class="mx-auto max-w-[620px] rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-6 text-center">
+            <span class="grid h-20 w-20 place-items-center rounded-full bg-[#E6F6F4] text-4xl mx-auto">🎧</span>
+            <strong class="mt-5 block text-xl font-black">اسمع واكتب ما سمعت</strong>
+            <p class="mt-2 text-xs font-bold text-[#64748B]">الجملة {{ selectedSegments.length ? 1 : 0 }} من {{ selectedSegments.length }}</p>
+            <button type="button" class="mt-5 h-12 rounded-2xl bg-[#00685F] px-6 text-sm font-black text-white">تشغيل الجملة</button>
+            <textarea rows="4" class="mt-5 w-full rounded-2xl border border-[#DCE9FF] bg-white p-4 text-left text-sm font-bold outline-none" dir="ltr" placeholder="Write what you heard..."></textarea>
+          </div>
+        </ng-container>
+
+        <ng-container *ngIf="activity.type === 'quiz'">
+          <div *ngIf="selectedQuizQuestions[0] as question; else noQuizInStudentPreview" class="mx-auto max-w-[620px] rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-6">
+            <span class="block text-center text-xs font-black text-[#004E47]">سؤال 1 من {{ selectedQuizQuestions.length }} · {{ quizTypeLabel(question.type) }}</span>
+            <strong class="mt-5 block text-center text-xl font-black leading-8">{{ question.prompt }}</strong>
+            <div class="mt-5 grid gap-3">
+              <button *ngFor="let option of question.options; let optionIndex = index" type="button" class="min-h-12 rounded-2xl border border-[#DCE9FF] bg-white px-4 text-right text-sm font-bold"><b class="ml-2 text-[#004E47]">{{ optionIndex + 1 }}</b>{{ option }}</button>
+            </div>
+          </div>
+          <ng-template #noQuizInStudentPreview><div class="rounded-2xl bg-[#F8F9FF] p-10 text-center text-sm font-black text-[#64748B]">لا توجد أسئلة معتمدة لتظهر للطالب.</div></ng-template>
+        </ng-container>
+
+        <ng-container *ngIf="activity.type === 'ai-conversation'">
+          <div class="mx-auto grid max-w-[680px] gap-4 rounded-xl border border-[#E5EEFF] bg-[#F8F9FF] p-5">
+            <div *ngIf="activity.conversationConfig as config" class="rounded-2xl bg-[#E6F6F4] p-4 text-xs font-black leading-6 text-[#004E47]">{{ config.scenario }}<small class="mt-1 block text-[#64748B]">{{ config.studentRole }} · {{ config.aiRole }} · {{ config.level }}</small></div>
+            <div class="ml-14 rounded-2xl bg-white p-4 text-sm font-bold leading-7" dir="ltr">{{ activity.conversationConfig?.openingMessage || 'Let\'s practise the same situation from the lesson. How would you respond?' }}</div>
+            <div class="mr-14 rounded-2xl bg-[#00685F] p-4 text-sm font-bold leading-7 text-white" dir="ltr">The student's answer appears here.</div>
+            <label class="grid gap-2 text-xs font-black text-[#64748B]">إجابة الطالب التجريبية
+              <textarea rows="3" class="rounded-2xl border border-[#DCE9FF] bg-white p-4 text-left text-sm font-bold" dir="ltr" placeholder="Type a reply..."></textarea>
+            </label>
+            <small class="font-black text-[#64748B]">المحادثة: 10 جولات ثابتة وفق السيناريو المعتمد، مع تقرير نهائي.</small>
+          </div>
+        </ng-container>
+
+        <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-[#E5EEFF] pt-5">
+          <button type="button" (click)="previousStudentPreview()" [disabled]="previewIndex === 0" class="h-12 rounded-2xl border border-[#E5EEFF] bg-white px-5 text-sm font-black text-[#64748B] disabled:opacity-40">المرحلة السابقة</button>
+          <button type="button" (click)="nextStudentPreview()" class="h-12 rounded-2xl bg-[#00685F] px-6 text-sm font-black text-white">{{ previewIndex === activities.length - 1 ? 'إنهاء مراجعة الدرس' : 'المرحلة التالية' }}</button>
+        </div>
+      </section>
+    </ng-container>
+
+    <section *ngIf="!loading() && !lesson" class="rounded-xl border border-[#E5EEFF] bg-white p-12 text-center">
+      <h1 class="text-xl font-black">الدرس غير موجود</h1>
+      <a [routerLink]="contentBasePath + '/lessons'" class="mt-4 inline-flex text-sm font-black text-[#004E47]">العودة لمكتبة الدروس</a>
+    </section>
+  </div>
+</section>

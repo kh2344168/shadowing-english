@@ -1,0 +1,32 @@
+<section class="student-page student-page--narrow" dir="rtl" aria-labelledby="weeks-title">
+  <header class="student-page-header">
+    <a routerLink="/student/dashboard" class="student-back" aria-label="العودة للرئيسية">←</a>
+    <div><span class="student-kicker">مسارك الدراسي</span><h1 id="weeks-title">الأسابيع</h1><p>كل أسبوع يفتح بالتدريج. ركّز فقط في الخطوة الموجودة قدامك.</p></div>
+  </header>
+
+  <div *ngIf="loading()" class="student-loading" role="status">بنجهز الأسابيع...</div>
+
+  <div *ngIf="!loading() && course as courseView" class="student-week-grid">
+    <a
+      *ngFor="let week of courseView.weeks; let weekIndex = index"
+      class="student-week-card"
+      [class.student-week-card--locked]="week.status === 'locked'"
+      [class.student-week-card--completed]="week.status === 'completed'"
+      [routerLink]="week.status === 'locked' ? null : ['/student/weeks', week.id]"
+      [attr.aria-disabled]="week.status === 'locked'"
+    >
+      <span class="student-week-card__number">{{ week.status === 'completed' ? '✓' : week.status === 'locked' ? '🔒' : weekIndex + 1 }}</span>
+      <div class="student-week-card__copy">
+        <span class="student-kicker">الأسبوع {{ weekIndex + 1 }}</span>
+        <h2>{{ week.name }}</h2>
+        <p>{{ week.lessons.length }} دروس · {{ week.status === 'completed' ? 'مكتمل' : week.status === 'locked' ? 'مقفول حاليًا' : 'متاح الآن' }}</p>
+        <div class="student-progress-track"><span [style.width.%]="week.progressPercent"></span></div>
+      </div>
+      <strong>{{ week.progressPercent }}%</strong>
+    </a>
+
+    <section *ngIf="courseView.weeks.length === 0" class="student-empty-state">
+      <span>📚</span><h2>المنهج لسه بيتجهز</h2><p>هتظهر الأسابيع هنا بمجرد ما المشرف ينشرها.</p>
+    </section>
+  </div>
+</section>

@@ -1,0 +1,39 @@
+<section class="student-page student-page--practice" dir="rtl" aria-labelledby="review-title">
+  <div *ngIf="loading()" class="student-loading" role="status">بنجهز المراجعة...</div>
+
+  <ng-container *ngIf="!loading() && activeReview as review">
+    <header class="student-practice-header">
+      <a routerLink="/student/dashboard" class="student-back" aria-label="إغلاق المراجعة">×</a>
+      <div class="student-practice-header__track"><span *ngFor="let segment of review.lessonView.lesson.segments; let segmentIndex = index" [class.is-completed]="segmentIndex < activeSegmentIndex" [class.is-current]="segmentIndex === activeSegmentIndex"></span></div>
+      <strong>{{ activeSegmentIndex + 1 }}/{{ review.lessonView.lesson.segments.length }}</strong>
+    </header>
+
+    <main *ngIf="!completed" class="student-review-session">
+      <span class="student-pill">{{ previewMode ? 'معاينة مراجعة الغد' : 'مراجعة اليوم' }}</span>
+      <h1 id="review-title">{{ review.lessonView.lesson.title }}</h1>
+      <p>مراجعة شادوينج سريعة — اسمع، ردد الجملة، وبعدها انتقل للي بعدها.</p>
+
+      <section *ngIf="!started" class="student-review-intro">
+        <span aria-hidden="true">🎙️</span><h2>{{ review.lessonView.lesson.segments.length }} جمل فقط</h2><p>هتخلصها في أقل من 5 دقائق.</p>
+        <button type="button" class="student-primary-action student-primary-action--full" (click)="begin()">ابدأ المراجعة</button>
+      </section>
+
+      <section *ngIf="started && activeSegment as segment" class="student-review-prompt">
+        <span class="student-kicker">اسمع ثم ردد</span>
+        <h2 dir="ltr">{{ segment.text }}</h2>
+        <p>{{ segment.translation }}</p>
+        <audio *ngIf="mediaUrl" [src]="mediaUrl" controls class="student-audio" aria-label="صوت درس المراجعة"></audio>
+        <button type="button" class="student-primary-action student-primary-action--full" (click)="nextSegment()">{{ activeSegmentIndex === review.lessonView.lesson.segments.length - 1 ? 'أنهِ المراجعة' : 'رددتها — الجملة التالية' }}</button>
+      </section>
+    </main>
+
+    <main *ngIf="completed" class="student-complete-card student-complete-card--compact">
+      <span class="student-complete-card__badge">✓</span><span class="student-kicker">المراجعة تمت</span><h1>كده النطق بيثبت أكتر</h1><p>{{ previewMode ? 'دي كانت معاينة؛ مراجعة الغد الأصلية ستظل في موعدها.' : 'أحسنت. هنظهر لك المراجعة التالية في موعدها.' }}</p>
+      <a class="student-primary-action student-primary-action--full" routerLink="/student/dashboard">ارجع لمسارك</a>
+    </main>
+  </ng-container>
+
+  <section *ngIf="!loading() && !activeReview" class="student-empty-state">
+    <span>✨</span><h1 id="review-title">مفيش مراجعات مطلوبة الآن</h1><p>بعد ما تكمل درس، هنرتب لك مراجعات شادوينج قصيرة في الأيام 1 و3 و7 و14.</p><a class="student-primary-action" routerLink="/student/dashboard">ارجع لمسارك</a>
+  </section>
+</section>

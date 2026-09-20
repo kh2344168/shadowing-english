@@ -1,0 +1,100 @@
+<section class="learning-page" dir="rtl" aria-labelledby="dashboard-title">
+  <div *ngIf="loading()" class="student-loading" role="status">بنجهز مسارك...</div>
+
+  <ng-container *ngIf="!loading() && course as courseView">
+    <header class="unit-strip">
+      <div class="unit-strip__main">
+        <span class="unit-strip__icon" aria-hidden="true">★</span>
+        <div>
+          <div class="unit-strip__eyebrow">
+            <strong>المستوى A1</strong>
+            <span>المستوى المبتدئ</span>
+          </div>
+          <h1 id="dashboard-title">{{ currentWeek?.name || courseView.courseName }}</h1>
+          <p>أهلًا يا {{ studentFirstName }}، ركّز فقط على الخطوة الحالية.</p>
+        </div>
+      </div>
+
+      <div class="unit-strip__progress">
+        <span><b>★</b> {{ courseView.completedLessons }} / {{ courseView.totalLessons }} دروس</span>
+        <div><i [style.width.%]="courseView.progressPercent"></i></div>
+      </div>
+    </header>
+
+    <main *ngIf="currentWeek as week; else emptyPath" class="learning-path-wrap">
+      <a class="review-shortcut" routerLink="/student/review">
+        <span aria-hidden="true">↑</span>
+        <strong>{{ reviews.length ? 'لديك ' + reviews.length + ' مراجعات مستحقة' : 'مراجعة الدروس السابقة' }}</strong>
+      </a>
+
+      <ol class="learning-path" aria-label="دروس المسار بالترتيب">
+        <svg class="learning-path__wire" aria-hidden="true" fill="none" preserveAspectRatio="none" viewBox="0 0 420 1000">
+          <path d="M210 20 C330 95 340 180 220 245 C85 320 90 420 215 490 C335 560 330 665 205 730 C95 790 90 900 210 980" />
+        </svg>
+
+        <li
+          *ngFor="let lesson of week.lessons; let lessonIndex = index"
+          class="path-lesson"
+          [class.is-locked]="lesson.isLocked"
+          [class.is-completed]="lesson.isCompleted"
+          [class.is-current]="lesson.curriculumSlotId === currentLesson?.curriculumSlotId"
+        >
+          <span *ngIf="lesson.curriculumSlotId === currentLesson?.curriculumSlotId" class="path-lesson__beacon">
+            <i></i> ابدأ من هنا
+          </span>
+
+          <a
+            *ngIf="!lesson.isLocked; else lockedNode"
+            class="path-lesson__node"
+            [routerLink]="['/student/lessons', lesson.lesson.id]"
+            [queryParams]="{ slotId: lesson.curriculumSlotId }"
+            [attr.aria-label]="'فتح الدرس ' + (lessonIndex + 1) + ': ' + lesson.lesson.title"
+          >
+            <span>{{ lesson.isCompleted ? '✓' : lessonIndex + 1 }}</span>
+          </a>
+          <ng-template #lockedNode>
+            <span class="path-lesson__node" aria-hidden="true"><span>🔒</span></span>
+          </ng-template>
+
+          <div class="path-lesson__meta">
+            <h2>الدرس {{ lessonIndex + 1 }} — {{ lesson.lesson.title }}</h2>
+            <div class="path-stars" [attr.aria-label]="lesson.completedStageCount + ' مراحل مكتملة من ' + lesson.stages.length">
+              <span
+                *ngFor="let lessonStage of lesson.stages; let stageIndex = index"
+                [class.is-filled]="stageIndex < lesson.completedStageCount"
+              >★</span>
+            </div>
+            <small *ngIf="lesson.isCompleted">تم إتقان الدراسة الأساسية</small>
+            <small *ngIf="lesson.isLocked">يفتح بعد إتمام الدرس السابق</small>
+          </div>
+
+          <article *ngIf="lesson.curriculumSlotId === currentLesson?.curriculumSlotId && !lesson.isCompleted" class="path-action-card">
+            <span class="path-action-card__pointer" aria-hidden="true"></span>
+            <div class="path-action-card__heading">
+              <div><small>الدرس الحالي</small><h3>{{ lesson.lesson.title }}</h3></div>
+              <span aria-hidden="true">▥</span>
+            </div>
+            <p>{{ lesson.lesson.description || 'تدرّب على الاستماع والتكرار لتثبيت النطق والمعنى بثقة.' }}</p>
+            <a [routerLink]="lesson.nextPath" [queryParams]="{ slotId: lesson.curriculumSlotId }">
+              {{ primaryActionLabel }} <b aria-hidden="true">←</b>
+            </a>
+          </article>
+        </li>
+      </ol>
+
+      <footer class="path-footer">
+        <span></span>
+        <p>تُتاح الدروس التالية تلقائيًا بعد إتمام الدرس الحالي</p>
+      </footer>
+    </main>
+
+    <ng-template #emptyPath>
+      <section class="student-empty-state">
+        <span aria-hidden="true">📚</span>
+        <h2>المسار لسه بيتجهز</h2>
+        <p>ستظهر الدروس هنا بمجرد ما ينشرها المدرس.</p>
+        <a class="student-primary-action" routerLink="/student/weeks">استعرض الأسابيع</a>
+      </section>
+    </ng-template>
+  </ng-container>
+</section>

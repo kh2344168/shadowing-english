@@ -1,0 +1,26 @@
+<section class="student-page student-page--narrow" dir="rtl" aria-labelledby="progress-title">
+  <header class="student-page-header"><a routerLink="/student/dashboard" class="student-back" aria-label="العودة للرئيسية">←</a><div><span class="student-kicker">بدون تعقيد</span><h1 id="progress-title">تقدمك</h1><p>لقطة بسيطة توضح وصلت لفين وإيه اللي جاي.</p></div></header>
+  <div *ngIf="loading()" class="student-loading" role="status">بنحسب تقدمك...</div>
+
+  <ng-container *ngIf="!loading() && course as courseView">
+    <section class="student-progress-hero">
+      <div class="student-progress-hero__ring" [style.--student-progress]="courseView.progressPercent + '%'">{{ courseView.progressPercent }}%</div>
+      <div><span class="student-kicker">{{ courseView.courseName }}</span><h2>{{ courseView.completedLessons }} دروس مكتملة</h2><p>من أصل {{ courseView.totalLessons }} دروس منشورة لك حاليًا.</p></div>
+    </section>
+
+    <div class="student-stat-grid">
+      <article><span>✓</span><strong>{{ courseView.completedLessons }}</strong><small>دروس خلصتها</small></article>
+      <article><span>🎙️</span><strong>{{ recordingCount }}</strong><small>تسجيلات محفوظة</small></article>
+      <article><span>↻</span><strong>{{ reviewCount }}</strong><small>مراجعات مجدولة</small></article>
+    </div>
+
+    <section class="student-panel">
+      <div class="student-panel__heading"><div><span class="student-kicker">حسب الأسبوع</span><h2>رحلتك</h2></div><div class="student-panel__links"><a routerLink="/student/knowledge-bank">بنك الكلمات</a><a routerLink="/student/report">تقرير PDF</a><a routerLink="/student/weeks">كل الأسابيع</a></div></div>
+      <div class="student-progress-weeks">
+        <a *ngFor="let week of courseView.weeks" [routerLink]="week.status === 'locked' ? null : ['/student/weeks', week.id]" [attr.aria-disabled]="week.status === 'locked'">
+          <span>{{ week.status === 'completed' ? '✓' : week.status === 'locked' ? '🔒' : '•' }}</span><div><strong>{{ week.name }}</strong><div class="student-progress-track"><i [style.width.%]="week.progressPercent"></i></div></div><small>{{ week.progressPercent }}%</small>
+        </a>
+      </div>
+    </section>
+  </ng-container>
+</section>

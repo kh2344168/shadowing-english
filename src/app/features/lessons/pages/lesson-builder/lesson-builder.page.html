@@ -1,0 +1,474 @@
+<main class="page">
+  <video
+    #lessonPlayer
+    class="hidden-media"
+    [src]="videoUrl || ''"
+    preload="metadata"
+    playsinline
+    (loadedmetadata)="onLessonMetadataLoaded()"
+    (timeupdate)="onLessonTimeUpdate()"
+    (play)="onLessonPlay()"
+    (pause)="onLessonPause()"
+  ></video>
+
+  <header class="builder-topbar">
+    <div>
+      <div class="builder-breadcrumb">
+        <a [routerLink]="contentBasePath + '/lessons'">الدروس</a>
+        <span class="material-symbols-outlined">chevron_left</span>
+        <strong>{{ editingLessonId ? 'تعديل الدرس' : 'إنشاء درس' }}</strong>
+      </div>
+      <div class="builder-title-row">
+        <h1>{{ editingLessonId ? 'تعديل الدرس' : 'إنشاء درس جديد' }}</h1>
+        <span class="builder-status-pill">{{ editingLessonId ? 'مسودة قابلة للتعديل' : 'درس جديد' }}</span>
+      </div>
+      <p>أضف بيانات الدرس والملف الصوتي، راجع تقسيم الجمل، ثم احفظ لبدء معالجة المحتوى.</p>
+    </div>
+    <div class="builder-top-actions">
+      <span class="builder-autosave" *ngIf="hasBuilderDraft"><span class="material-symbols-outlined">check_circle</span>{{ isSavingBuilderDraft ? 'جاري حفظ المسودة...' : 'المسودة محفوظة' }}</span>
+      <a *ngIf="editingLessonId" class="button ghost" [routerLink]="[contentBasePath + '/lessons', editingLessonId, 'content-review']">معاينة ومراجعة المحتوى</a>
+      <button type="button" class="ghost" (click)="saveDraftNow()">حفظ مسودة</button>
+      <button type="button" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">{{ auth.isAdmin() ? 'حفظ وبدء المعالجة' : 'حفظ الدرس' }}</button>
+    </div>
+  </header>
+
+<section class="builder-layout">
+    <div class="card lesson-settings">
+      <div class="section-head">
+        <div>
+          <h2>{{ editingLessonId ? 'تعديل الدرس' : 'إنشاء درس جديد' }}</h2>
+          <p class="hint">ارفع الصوت والنص، راجع التقسيم والتوقيت، ثم ابدأ المعالجة. المراحل والكلمات والاختبار ستُجهز تلقائيًا في شاشة مستقلة.</p>
+        </div>
+
+        <a class="button ghost" [routerLink]="contentBasePath + '/lessons'">الرجوع للمكتبة</a>
+      </div>
+
+      <div class="settings-grid">
+        <label class="field">
+          اسم الدرس
+          <input type="text" [(ngModel)]="lessonTitle" (ngModelChange)="onBuilderFieldChanged()" placeholder="الدرس الأول — مكالمة خدمة العملاء" />
+        </label>
+        <label class="field">
+          عدد تكرارات الشادوينج المطلوبة
+          <input type="number" min="1" [(ngModel)]="requiredRepetitions" (ngModelChange)="onBuilderFieldChanged()" />
+        </label>
+        <label class="field">
+          نوع محتوى الدرس
+          <select [(ngModel)]="lessonContentType" (ngModelChange)="onBuilderFieldChanged()">
+            <option value="auto">يحدده الذكاء الاصطناعي من المحتوى</option>
+            <option value="call-center">Call Center / Customer Service</option>
+            <option value="youtube">فيديو أو بودكاست من YouTube</option>
+            <option value="book">موقف من كتاب</option>
+            <option value="general">موضوع إنجليزي عام</option>
+          </select>
+        </label>
+        <label class="field">
+          موضوع التدريب
+          <input type="text" [(ngModel)]="lessonTopic" (ngModelChange)="onBuilderFieldChanged()" placeholder="مثال: Account verification أو Weather" />
+        </label>
+      </div>
+
+      <details class="mt-4 rounded-2xl border border-[#D8E2E8] bg-[#F8FAFC] p-4">
+        <summary class="cursor-pointer text-sm font-black text-[#0F766E]">إعدادات إضافية تساعد الذكاء الاصطناعي</summary>
+        <div class="mt-4 grid gap-3 md:grid-cols-2">
+          <label class="field">
+            الهدف التعليمي
+            <input type="text" [(ngModel)]="lessonLearningObjective" (ngModelChange)="onBuilderFieldChanged()" placeholder="مثال: التعامل مع مشكلة في حساب العميل" />
+          </label>
+          <label class="field">
+            ملاحظات للمعالجة والمحادثة
+            <textarea rows="3" [(ngModel)]="lessonTeacherNotes" (ngModelChange)="onBuilderFieldChanged()" placeholder="أي تعليمات خاصة تريد أن يلتزم بها الذكاء الاصطناعي"></textarea>
+          </label>
+        </div>
+      </details>
+
+      <div class="actions">
+        <label class="upload-button" for="mediaInput">رفع صوت أو فيديو الدرس</label>
+        <input id="mediaInput" type="file" accept="audio/*,video/*" (change)="onMediaSelected($event)" hidden />
+
+        <label class="upload-button secondary-upload" for="scriptInput">رفع نص الدرس</label>
+        <input id="scriptInput" type="file" accept=".txt,.json,text/plain,application/json" (change)="onScriptSelected($event)" hidden />
+
+        <button type="button" class="ghost" (click)="saveDraftNow()">حفظ مسودة</button>
+        <button type="button" class="secondary" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">{{ auth.isAdmin() ? 'حفظ وبدء معالجة الدرس' : 'إنهاء وحفظ الدرس' }}</button>
+      </div>
+
+      <p class="file-name" *ngIf="currentMediaFileName">Media: {{ currentMediaFileName }}</p>
+      <p class="file-name" *ngIf="scriptFileName">Script: {{ scriptFileName }} · {{ scriptProgressLabel }}</p>
+      <p class="file-name autosave" *ngIf="hasBuilderDraft">Auto saved draft at {{ builderDraftSavedLabel }} <span *ngIf="isSavingBuilderDraft">· saving media...</span></p>
+      <p class="script-error" *ngIf="scriptError">{{ scriptError }}</p>
+
+      <section *ngIf="lessonSavedMessage" class="rounded-2xl border border-[#BFE7E3] bg-[#F1FBFA] p-4">
+        <strong class="block text-sm font-black text-[#0F766E]">{{ lessonSavedMessage }}</strong>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <a class="button secondary" [routerLink]="contentBasePath + (auth.isTeacher() ? '/curriculum' : '/curriculums')">2 · أضف الدرس إلى المنهج</a>
+          <a class="button ghost" [routerLink]="contentBasePath + '/groups'">3 · احفظ ثم انشر للطلاب</a>
+        </div>
+      </section>
+
+      <section class="local-ai-card">
+        <div class="local-ai-copy">
+          <div class="local-ai-title-row">
+            <span class="local-ai-badge">تقسيم تلقائي للجمل</span>
+
+          </div>
+          <h3>قسّم ملف النص على الصوت تلقائيًا</h3>
+          <p>
+            كل سطر في ملف النص يتحول إلى مقطع مبدئي على الـWaveform. راجع التوقيت قبل حفظ الدرس.
+          </p>
+          <small>النتيجة مساعدة أولية فقط، ويمكنك تعديل بداية ونهاية أي جملة يدويًا.</small>
+        </div>
+
+        <div class="local-ai-actions">
+          <label class="start-padding-control">
+            <span>ابدأ المقطع قبل الكلام بـ</span>
+            <select [(ngModel)]="autoSplitStartPaddingSeconds" [disabled]="isAutoSplitting">
+              <option [ngValue]="0.25">0.25 sec</option>
+              <option [ngValue]="0.5">0.5 sec</option>
+              <option [ngValue]="0.75">0.75 sec</option>
+              <option [ngValue]="1">1 sec</option>
+              <option [ngValue]="1.5">1.5 sec</option>
+            </select>
+            <small>القيمة الافتراضية ثانية واحدة.</small>
+          </label>
+          <button type="button" (click)="splitScriptAutomatically()" [disabled]="!canAutoSplit">
+            {{ isAutoSplitting ? 'جاري تقسيم الدرس...' : 'تقسيم تلقائي' }}
+          </button>
+          <button type="button" class="delete" (click)="cancelAutomaticSplitting()" *ngIf="isAutoSplitting">إلغاء</button>
+        </div>
+
+        <div class="ai-progress" *ngIf="autoSplitMessage || isAutoSplitting">
+          <div class="ai-progress-head">
+            <strong>{{ autoSplitMessage }}</strong>
+            <span *ngIf="autoSplitPercent !== null">{{ autoSplitPercent }}%</span>
+          </div>
+          <div class="ai-progress-track" *ngIf="autoSplitPercent !== null">
+            <span [style.width.%]="autoSplitPercent"></span>
+          </div>
+          <div class="ai-progress-indeterminate" *ngIf="autoSplitPercent === null && isAutoSplitting"><span></span></div>
+        </div>
+
+        <p class="script-error" *ngIf="autoSplitError">{{ autoSplitError }}</p>
+
+        <div class="ai-result-summary" *ngIf="autoAlignmentResults.length > 0">
+          <strong>تم إنشاء {{ autoAlignmentResults.length }} مقطع</strong>
+          <span>{{ autoSplitMatchedCount }} مقاطع جاهزة</span>
+          <span [class.warning]="autoSplitReviewCount > 0">{{ autoSplitReviewCount }} تحتاج مراجعة</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="card wave-card">
+      <div class="wave-editor-head">
+        <div>
+          <h2>تحديد مقاطع الصوت</h2>
+          <p class="hint">حرّك حدود البداية والنهاية على الـWaveform ثم أضف الجملة للمقاطع.</p>
+        </div>
+
+        <span class="wave-state" *ngIf="isWaveformLoading">جاري تحميل الموجة الصوتية...</span>
+        <span class="wave-state ready" *ngIf="isWaveformReady">جاهز</span>
+      </div>
+
+      <div class="empty-video" *ngIf="!videoUrl">
+        ارفع ملف الصوت أو الفيديو لعرض الموجة الصوتية.
+      </div>
+
+      <div class="wave-error" *ngIf="waveformError">{{ waveformError }}</div>
+
+      <div class="wave-editor" *ngIf="videoUrl">
+        <div class="next-sentence-panel">
+          <div class="next-sentence-copy">
+            <span class="next-label">الجملة الحالية</span>
+            <strong *ngIf="currentDraftSentence">{{ currentDraftSentence }}</strong>
+            <strong *ngIf="!currentDraftSentence && hasScript && isScriptFinished">تمت إضافة كل جمل النص.</strong>
+            <strong *ngIf="!currentDraftSentence && !hasScript">ارفع ملف النص أو اكتب الجملة يدويًا.</strong>
+            <p>حدد الجملة من العصايتين، وبعدها اضغط Add.</p>
+          </div>
+
+          <button type="button" (click)="addSegment()" [disabled]="!canAddSegment">إضافة الجملة الحالية</button>
+        </div>
+
+        <div class="transport-panel">
+          <div class="transport-buttons">
+            <button type="button" (click)="toggleLessonPlayback()" [disabled]="!isWaveformReady">
+              {{ isLessonPlaying ? 'إيقاف مؤقت' : 'تشغيل' }}
+            </button>
+            <button type="button" class="secondary" (click)="skipLesson(-5)" [disabled]="!isWaveformReady">-5s</button>
+            <button type="button" class="secondary" (click)="skipLesson(5)" [disabled]="!isWaveformReady">+5s</button>
+            <button type="button" class="ghost" (click)="stopLessonPlayback()" [disabled]="!isWaveformReady">إيقاف</button>
+          </div>
+
+          <div class="time-readout">{{ formatTime(lessonCurrentTime) }} / {{ formatTime(lessonDuration) }}</div>
+        </div>
+
+        <div class="zoom-panel">
+          <div>
+            <strong>Mouse wheel zoom</strong>
+            <span>Put the cursor over the waveform and use the mouse wheel to zoom in/out.</span>
+          </div>
+
+          <div class="zoom-actions">
+            <button type="button" class="ghost" (click)="zoomWaveform(-20)" [disabled]="!isWaveformReady || waveZoom <= minWaveZoom">-</button>
+            <span class="zoom-badge">{{ waveZoomLabel }}</span>
+            <button type="button" class="ghost" (click)="zoomWaveform(20)" [disabled]="!isWaveformReady || waveZoom >= maxWaveZoom">+</button>
+            <button type="button" class="ghost" (click)="resetWaveZoom()" [disabled]="!isWaveformReady">Fit</button>
+          </div>
+        </div>
+
+        <div #waveScroll class="lesson-wave-wrap" [class.loading]="isWaveformLoading" (wheel)="onWaveAreaWheel($event)">
+          <div class="wave-surface" [style.width.px]="waveContentWidth">
+            <div #waveformContainer class="lesson-waveform"></div>
+
+            <div class="selection-overlay" *ngIf="hasActiveSelection">
+              <div class="selection-stick start" [style.left.px]="selectionStartPx"><span>Start</span></div>
+
+              <button
+                type="button"
+                class="selection-add-button"
+                [style.left.px]="selectionCenterPx"
+                (click)="addSegment(); $event.stopPropagation()"
+                [disabled]="!canAddSegment"
+              >
+                Add
+              </button>
+
+              <div class="selection-stick end" [style.left.px]="selectionEndPx"><span>End</span></div>
+            </div>
+          </div>
+
+          <div #timelineContainer class="lesson-timeline"></div>
+        </div>
+
+        <div class="actions wave-actions">
+          <button type="button" class="secondary" (click)="previewCurrentSelection()" [disabled]="!hasActiveSelection">Preview selected sentence</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card script-card">
+      <h2>Sentence text</h2>
+
+      <div class="script-current" *ngIf="hasScript">
+        <span class="script-label">Sentence on deck</span>
+        <strong *ngIf="!isScriptFinished">{{ currentScriptText }}</strong>
+        <strong *ngIf="isScriptFinished">تمت إضافة كل جمل النص.</strong>
+      </div>
+
+      <div class="script-actions" *ngIf="hasScript">
+        <button type="button" class="ghost" (click)="previousScriptSentence()" [disabled]="selectedScriptIndex <= 0">Previous</button>
+        <button type="button" class="ghost" (click)="nextScriptSentence()" [disabled]="selectedScriptIndex >= scriptLines.length - 1">Next</button>
+        <button type="button" class="secondary" (click)="useCurrentScriptSentence()" [disabled]="isScriptFinished">Use this sentence</button>
+        <button type="button" class="delete" (click)="clearScript()">Clear script</button>
+      </div>
+
+      <label class="field">
+        Current sentence
+        <textarea rows="4" [(ngModel)]="segmentText" (ngModelChange)="onBuilderFieldChanged()" placeholder="The current script sentence will appear here. You can edit it before Add."></textarea>
+      </label>
+
+      <label class="field">
+        Arabic translation
+        <textarea rows="3" [(ngModel)]="segmentTranslation" (ngModelChange)="onBuilderFieldChanged()" placeholder="الترجمة العربية للجملة (اختياري)"></textarea>
+      </label>
+
+      <div class="time-box">
+        <div><span>Start</span><strong>{{ formatTime(segmentStart) }}</strong></div>
+        <div><span>End</span><strong>{{ formatTime(segmentEnd) }}</strong></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="full-button" (click)="addSegment()" [disabled]="!canAddSegment">Add Segment</button>
+        <button type="button" class="ghost" (click)="replaceSelectedSegment()" [disabled]="!currentSegment">Replace selected</button>
+      </div>
+    </div>
+
+    <div *ngIf="false" class="card lesson-tools-card">
+      <div class="section-head">
+        <div>
+          <h2>ترتيب أدوات الدرس</h2>
+          <p class="hint">الطالب ينفذ الأدوات بالترتيب. أول شادوينج ثابت، وأنت تختار ماذا تضيف بعده.</p>
+        </div>
+        <span class="tool-count">{{ activities.length }} مراحل</span>
+      </div>
+
+      <div class="lesson-tools-list">
+        <article class="lesson-tool" *ngFor="let activity of activities; let activityIndex = index">
+          <span class="lesson-tool__number">{{ activityIndex + 1 }}</span>
+          <div class="lesson-tool__copy">
+            <small>{{ activityTypeLabel(activity.type) }}</small>
+            <input type="text" [(ngModel)]="activity.title" (ngModelChange)="onBuilderFieldChanged()" aria-label="اسم مرحلة الدرس" />
+            <label *ngIf="activity.type === 'ai-conversation'" class="field compact-field">
+              عدد أسئلة المحادثة
+              <input type="number" min="1" max="20" [(ngModel)]="activity.questionCount" (ngModelChange)="onBuilderFieldChanged()" />
+            </label>
+            <label *ngIf="activity.type === 'ai-conversation'" class="field compact-field">
+              تعليمات المحادثة
+              <textarea rows="2" [(ngModel)]="activity.instructions" (ngModelChange)="onBuilderFieldChanged()"></textarea>
+            </label>
+          </div>
+          <div class="lesson-tool__actions">
+            <button type="button" class="ghost small" (click)="moveActivity(activityIndex, -1)" [disabled]="activityIndex <= 1">↑</button>
+            <button type="button" class="ghost small" (click)="moveActivity(activityIndex, 1)" [disabled]="activityIndex === 0 || activityIndex === activities.length - 1">↓</button>
+            <button type="button" class="delete" (click)="removeActivity(activityIndex)" [disabled]="activity.type === 'shadowing'">حذف</button>
+          </div>
+        </article>
+      </div>
+
+      <div class="lesson-tool-picker">
+        <strong>ماذا تريد أن تضيف بعد ذلك؟</strong>
+        <div class="actions compact">
+          <button type="button" class="secondary" (click)="addActivity('vocabulary')" [disabled]="!canAddActivity('vocabulary')">+ كلمات وصور</button>
+          <button type="button" class="secondary" (click)="addActivity('shadowing-review')">+ شادوينج ثانٍ</button>
+          <button type="button" class="secondary" (click)="addActivity('listen-write')" [disabled]="!canAddActivity('listen-write')">+ اسمع واكتب</button>
+          <button type="button" class="secondary" (click)="addActivity('ai-conversation')" [disabled]="!canAddActivity('ai-conversation')">+ محادثة AI</button>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="false" class="card lesson-readiness-card">
+      <div class="section-head">
+        <div>
+          <h2>مراجعة الدرس قبل إضافته للمنهج</h2>
+          <p class="hint">المراجعة لا تنشر الدرس. ارجع وعدّل أي جملة أو ترجمة أو صورة قبل الحفظ النهائي.</p>
+        </div>
+        <a
+          *ngIf="auth.isTeacher() && editingLessonId"
+          class="button secondary"
+          [routerLink]="['/teacher/lessons', editingLessonId, 'preview-shadowing', primaryShadowingActivityId]"
+        >جرّب الشادوينج كطالب</a>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div class="rounded-[18px] border p-4" [ngClass]="missingTranslationCount > 0 ? 'border-[#F5C66A] bg-[#FFF9EE]' : 'border-[#D9E6E4] bg-[#F8FEFD]'">
+          <strong class="block text-2xl" [ngClass]="missingTranslationCount > 0 ? 'text-[#B7791F]' : 'text-[#0F766E]'">{{ missingTranslationCount }}</strong>
+          <span class="mt-1 block text-xs font-extrabold text-[#64748B]">جمل بدون ترجمة</span>
+        </div>
+        <div class="rounded-[18px] border border-[#D9E6E4] bg-[#F8FEFD] p-4">
+          <strong class="block text-2xl text-[#0F766E]">{{ visibleVocabularyCount }}</strong>
+          <span class="mt-1 block text-xs font-extrabold text-[#64748B]">كلمات ستظهر للطالب</span>
+        </div>
+        <div class="rounded-[18px] border p-4" [ngClass]="vocabularyImagesNeedingReviewCount > 0 ? 'border-[#F5C66A] bg-[#FFF9EE]' : 'border-[#D9E6E4] bg-[#F8FEFD]'">
+          <strong class="block text-2xl" [ngClass]="vocabularyImagesNeedingReviewCount > 0 ? 'text-[#B7791F]' : 'text-[#0F766E]'">{{ vocabularyImagesNeedingReviewCount }}</strong>
+          <span class="mt-1 block text-xs font-extrabold text-[#64748B]">صور تحتاج قرار المدرس</span>
+        </div>
+        <div class="rounded-[18px] border border-[#D9E6E4] bg-[#F8FEFD] p-4">
+          <strong class="block text-2xl text-[#0F766E]">{{ activities.length }}</strong>
+          <span class="mt-1 block text-xs font-extrabold text-[#64748B]">مراحل مرتبة داخل الدرس</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="false" class="card vocabulary-review-card">
+      <div class="section-head">
+        <div>
+          <h2>الكلمات التي ستظهر للطالب</h2>
+          <p class="hint">كل كلمة تدخل بنك كلمات الدروس. سننبهك إن ظهرت قبل كده، وأنت تقرر حذفها أو إبقاءها للمراجعة.</p>
+        </div>
+        <div class="actions compact">
+          <button type="button" class="ghost" (click)="suggestVocabularyFromSegments()" [disabled]="segments.length === 0">اقتراح من الجمل</button>
+          <button type="button" class="secondary" (click)="addVocabularyItem()">إضافة كلمة</button>
+        </div>
+      </div>
+
+      <p class="hint" *ngIf="vocabulary.length === 0">لم يراجع المدرس كلمات بعد. سيستخدم الطالب الجمل كبديل مؤقت حتى تُضاف القائمة.</p>
+
+      <div class="segments" *ngIf="vocabulary.length > 0">
+        <article class="segment" *ngFor="let item of vocabulary; let itemIndex = index">
+          <div class="segment-number">{{ itemIndex + 1 }}</div>
+          <div class="segment-content">
+            <div class="settings-grid">
+              <label class="field">
+                الكلمة أو التعبير
+                <input type="text" [(ngModel)]="item.term" (ngModelChange)="onBuilderFieldChanged()" dir="ltr" placeholder="customer service" />
+              </label>
+              <label class="field">
+                المعنى بالعربية
+                <input type="text" [(ngModel)]="item.translation" (ngModelChange)="onBuilderFieldChanged()" placeholder="خدمة العملاء" />
+              </label>
+            </div>
+            <div class="vocabulary-history" *ngIf="getVocabularyHistory(item) as history" [class.vocabulary-history--visible]="history.length > 0">
+              <strong *ngIf="history.length > 0">ظهرت قبل كده في: {{ history.join('، ') }}</strong>
+              <span *ngIf="history.length === 0">كلمة جديدة في بنك الدروس</span>
+              <div class="actions compact" *ngIf="history.length > 0">
+                <button type="button" class="ghost small" (click)="setVocabularyVisibility(item, false)">لا تظهر للطالب</button>
+                <button type="button" class="secondary small" (click)="keepVocabularyForReview(item)">{{ item.repeatForReview ? 'إلغاء المراجعة المتكررة' : 'سيبها للمراجعة' }}</button>
+                <button type="button" class="ghost small" (click)="toggleVocabularyFutureTest(item)">{{ item.testLater ? 'إلغاء الاختبار اللاحق' : 'اختبار في المستقبل' }}</button>
+              </div>
+            </div>
+            <label class="field">
+              مثال من الدرس
+              <input type="text" [(ngModel)]="item.example" (ngModelChange)="onBuilderFieldChanged()" dir="ltr" placeholder="Thank you for calling customer service." />
+            </label>
+            <label class="field">
+              رابط صورة اختياري
+              <input type="url" [(ngModel)]="item.imageUrl" (ngModelChange)="onVocabularyImageChanged(item)" dir="ltr" placeholder="https://..." />
+            </label>
+            <div class="vocabulary-image-review" *ngIf="item.imageUrl?.trim()">
+              <img [src]="item.imageUrl" [alt]="item.term" />
+              <div>
+                <strong>{{ item.imageApproved ? 'الصورة معتمدة' : 'الصورة تحتاج قرارك' }}</strong>
+                <div class="actions compact">
+                  <button type="button" class="secondary small" (click)="approveVocabularyImage(item)">الصورة مناسبة</button>
+                  <button type="button" class="ghost small" (click)="searchVocabularyImage(item)">ابحث عن صورة أخرى</button>
+                  <button type="button" class="delete" (click)="removeVocabularyImage(item)">شيل الصورة فقط</button>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="ghost" (click)="searchVocabularyImage(item)" *ngIf="!item.imageUrl?.trim()">ابحث عن صورة للكلمة</button>
+            <label class="image-approval-row">
+              <input type="checkbox" [ngModel]="item.includeForStudent !== false" (ngModelChange)="setVocabularyVisibility(item, $event)" />
+              <span>إظهار الكلمة للطالب في هذا الدرس</span>
+            </label>
+            <small *ngIf="item.testLater" class="future-test-badge">محفوظة لاختبار تذكير مستقبلي</small>
+          </div>
+          <div class="segment-actions">
+            <button type="button" class="delete" (click)="removeVocabularyItem(itemIndex)">حذف</button>
+          </div>
+        </article>
+      </div>
+    </div>
+
+    <div class="card segments-card">
+      <div class="section-head">
+        <div>
+          <h2>Segments in this lesson</h2>
+          <p class="hint">Click any segment to edit its text or timing. Add a new segment anywhere; the list sorts by time.</p>
+        </div>
+        <div class="actions compact">
+          <button type="button" class="ghost" (click)="exportJson()" [disabled]="segments.length === 0">Copy JSON</button>
+          <button type="button" class="secondary" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">{{ auth.isAdmin() ? 'حفظ وبدء المعالجة' : 'Finish Lesson' }}</button>
+        </div>
+      </div>
+
+      <div class="empty-list" *ngIf="segments.length === 0">No segments yet.</div>
+
+      <div class="segments" *ngIf="segments.length > 0">
+        <div class="segment" *ngFor="let segment of segments; let i = index" (click)="selectSegmentForEdit(segment)">
+          <div class="segment-number">{{ i + 1 }}</div>
+          <div class="segment-content">
+            <strong>{{ segment.text }}</strong>
+            <span *ngIf="segment.translation">{{ segment.translation }}</span>
+            <small>{{ formatTime(segment.start) }} - {{ formatTime(segment.end) }}</small>
+            <div class="alignment-meta" *ngIf="getAutoAlignmentForSegment(segment) as alignment">
+              <span class="confidence-badge" [class.review]="alignment.status === 'review'">
+                {{ confidencePercent(alignment.confidence) }}% match
+              </span>
+              <span *ngIf="alignment.status === 'review'">Check timing manually</span>
+            </div>
+          </div>
+          <div class="segment-actions">
+            <button
+              type="button"
+              class="ghost small"
+              *ngIf="getAutoAlignmentForSegment(segment)?.status === 'review'"
+              (click)="reviewAutoAlignedSegment(i); $event.stopPropagation()"
+            >
+              Review
+            </button>
+            <button type="button" class="delete" (click)="deleteSegment(i); $event.stopPropagation()">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>

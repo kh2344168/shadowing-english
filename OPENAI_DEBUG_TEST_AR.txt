@@ -1,0 +1,11 @@
+CapSmart OpenAI Debug Test
+==========================
+
+- التعديل موجود في Debug فقط.
+- Release لا يحتوي على OPENAI_API_KEY ولا صلاحية إنترنت من هذا التعديل.
+- بعد Build Debug سيظهر Launcher ثانٍ باسم: OpenAI API Test
+- الاختبارات: نص / تحليل Screenshot / توليد صورة.
+- نموذج النص والرؤية: gpt-5.6-luna
+- نموذج توليد الصور: gpt-image-2.5-sunburst (quality=low, 1024x1024)
+- القيمة الفعلية للمفتاح محفوظة في local.properties فقط ولا يطبعها الكود في Logcat.
+- مع Credit remaining = $0.00 المتوقع أن ترجع الطلبات 429/quota حتى يتوفر رصيد API.

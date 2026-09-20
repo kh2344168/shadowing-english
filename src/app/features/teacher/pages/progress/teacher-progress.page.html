@@ -1,0 +1,58 @@
+<app-page-header
+  title="متابعة طلابي"
+  description="اختر درسًا لترى ما أنجزه كل طالب من طلاب مجموعاتك فقط."
+></app-page-header>
+
+<section class="card selector-card" *ngIf="lessons.length > 0">
+  <label>
+    الدرس
+    <select [(ngModel)]="selectedLessonId">
+      <option *ngFor="let lesson of lessons" [value]="lesson.id">
+        {{ lesson.weekName }} · {{ lesson.dayName }} · {{ lesson.title }}
+      </option>
+    </select>
+  </label>
+</section>
+
+<section class="card" *ngIf="selectedLesson as lesson">
+  <h2>{{ lesson.title }}</h2>
+  <p>{{ lesson.weekName }} · {{ lesson.dayName }} · المطلوب {{ lesson.requiredRepetitions }} تكرارات</p>
+
+  <div class="table">
+    <table>
+      <thead>
+        <tr>
+          <th>الطالب</th>
+          <th>التقدم</th>
+          <th>الحالة</th>
+          <th>التسجيلات</th>
+          <th>ملخص المدرس</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr *ngFor="let student of students">
+          <td>
+            <strong>{{ student.name }}</strong>
+            <small>{{ student.email }}</small>
+          </td>
+
+          <td>
+            {{ getProgress(student.id)?.completedRepetitions || 0 }}
+            /
+            {{ getProgress(student.id)?.requiredRepetitions || lesson.requiredRepetitions }}
+            <app-progress-bar [value]="studentRepository.getCompletionPercent(getProgress(student.id))"></app-progress-bar>
+          </td>
+
+          <td>{{ studentRepository.getStatus(getProgress(student.id)) }}</td>
+          <td>{{ getRecordingsCount(getProgress(student.id)) }}</td>
+          <td>{{ getMessage(student) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card" *ngIf="lessons.length === 0">
+  لا توجد دروس حتى الآن.
+</section>

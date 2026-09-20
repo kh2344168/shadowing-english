@@ -1,0 +1,99 @@
+<section class="knowledge-page" dir="rtl" aria-labelledby="knowledge-title">
+  <header class="knowledge-hero">
+    <div>
+      <span class="knowledge-kicker">ذاكرتك الإنجليزية</span>
+      <h1 id="knowledge-title">بنك الكلمات والجمل</h1>
+      <p>كل كلمة وعبارة وجملة ظهرت لك في مراحل تدريب أكملتها — مجمعة في مكان واحد بدون تكرار.</p>
+    </div>
+    <div class="knowledge-hero__actions">
+      <button type="button" class="btn btn--soft" (click)="copyAiContext()">
+        <span class="material-symbols-outlined">content_copy</span>
+        {{ copied ? 'تم النسخ ✓' : 'نسخ سياق للذكاء الاصطناعي' }}
+      </button>
+      <a routerLink="/student/report" class="btn btn--primary">
+        <span class="material-symbols-outlined">picture_as_pdf</span>
+        تقرير الطالب وPDF
+      </a>
+    </div>
+  </header>
+
+  <div *ngIf="loading()" class="knowledge-loading">بنجهز بنكك من الدروس اللي درستها...</div>
+
+  <ng-container *ngIf="!loading() && bank as bankView">
+    <div class="knowledge-stats">
+      <article><span class="material-symbols-outlined">spellcheck</span><strong>{{ bankView.words.length }}</strong><small>كلمة</small></article>
+      <article><span class="material-symbols-outlined">format_quote</span><strong>{{ bankView.chunks.length }}</strong><small>عبارة / Chunk</small></article>
+      <article><span class="material-symbols-outlined">short_text</span><strong>{{ bankView.sentences.length }}</strong><small>جملة تدربت عليها</small></article>
+      <article><span class="material-symbols-outlined">menu_book</span><strong>{{ bankView.studiedLessonCount }}</strong><small>درس ساهم في البنك</small></article>
+    </div>
+
+    <section class="knowledge-toolbar" aria-label="البحث والتصفية">
+      <label class="knowledge-search">
+        <span class="material-symbols-outlined">search</span>
+        <input [(ngModel)]="search" type="search" placeholder="ابحث عن كلمة، معنى، عبارة أو جملة..." />
+      </label>
+
+      <div class="knowledge-kinds">
+        <button type="button" [class.active]="kind === 'all'" (click)="setKind('all')">الكل</button>
+        <button type="button" [class.active]="kind === 'word'" (click)="setKind('word')">الكلمات</button>
+        <button type="button" [class.active]="kind === 'chunk'" (click)="setKind('chunk')">العبارات</button>
+        <button type="button" [class.active]="kind === 'sentence'" (click)="setKind('sentence')">الجمل</button>
+      </div>
+
+      <select [(ngModel)]="lessonId" aria-label="تصفية حسب الدرس">
+        <option value="all">كل الدروس السابقة</option>
+        <option *ngFor="let lesson of lessonOptions" [value]="lesson.id">{{ lesson.title }}</option>
+      </select>
+    </section>
+
+    <div class="knowledge-result-meta">
+      <strong>{{ visibleItems.length }}</strong>
+      <span>عنصر مطابق</span>
+      <small>العنصر المتكرر بين أكثر من درس يظهر مرة واحدة مع مصادره.</small>
+    </div>
+
+    <section *ngIf="visibleItems.length; else emptyBank" class="knowledge-list">
+      <article *ngFor="let item of visibleItems" class="knowledge-card" [class.knowledge-card--sentence]="item.kind === 'sentence'">
+        <div class="knowledge-card__top">
+          <div>
+            <span class="knowledge-type">{{ labelForKind(item.kind) }}</span>
+            <h2 dir="ltr">{{ item.text }}</h2>
+          </div>
+          <button type="button" class="knowledge-speak" (click)="speak(item)" [attr.aria-label]="'استمع إلى ' + item.text">
+            <span class="material-symbols-outlined">{{ speakingKey === item.key ? 'graphic_eq' : 'volume_up' }}</span>
+          </button>
+        </div>
+
+        <p *ngIf="item.translation" class="knowledge-translation">{{ item.translation }}</p>
+        <p *ngIf="item.explanation" class="knowledge-explanation" dir="ltr">{{ item.explanation }}</p>
+
+        <div *ngIf="item.example && item.example !== item.text" class="knowledge-example">
+          <small>Example</small>
+          <span dir="ltr">{{ item.example }}</span>
+        </div>
+        <div *ngIf="item.extraExample" class="knowledge-example knowledge-example--secondary">
+          <small>Another example</small>
+          <span dir="ltr">{{ item.extraExample }}</span>
+        </div>
+        <p *ngIf="item.usageNote" class="knowledge-note">{{ item.usageNote }}</p>
+
+        <footer>
+          <span><span class="material-symbols-outlined">history_edu</span> ظهر في {{ item.sources.length }} درس</span>
+          <div class="knowledge-sources">
+            <span *ngFor="let source of item.sources">{{ source.lessonTitle }}</span>
+          </div>
+        </footer>
+      </article>
+    </section>
+
+    <ng-template #emptyBank>
+      <section class="knowledge-empty">
+        <span class="material-symbols-outlined">library_books</span>
+        <h2>لسه مفيش عناصر مطابقة</h2>
+        <p *ngIf="bankView.all.length; else brandNew">غيّر البحث أو الفلتر وجرب تاني.</p>
+        <ng-template #brandNew><p>أكمل مرحلة الكلمات أو الشادوينج في أول درس، وهتبدأ العناصر تظهر هنا تلقائيًا.</p></ng-template>
+        <a routerLink="/student/dashboard">ارجع للمسار التعليمي</a>
+      </section>
+    </ng-template>
+  </ng-container>
+</section>

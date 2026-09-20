@@ -1,0 +1,70 @@
+<section *ngIf="group as item" dir="rtl" class="mx-auto w-full max-w-[1520px] pb-8">
+  <header class="mb-6 rounded-xl bg-white p-6 shadow-sm">
+    <div class="mb-4 flex flex-wrap items-center gap-2 text-xs text-[#6E7977]"><a routerLink="/admin/groups" class="text-[#6E7977] no-underline hover:text-[#004E47]">المجموعات</a><span class="material-symbols-outlined text-[14px]">chevron_left</span><span class="font-semibold text-[#004E47]">تفاصيل المجموعة</span></div>
+    <div class="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+      <div>
+        <div class="flex flex-wrap items-center gap-2"><h1 class="m-0 text-2xl font-bold">{{ item.name }}</h1><span class="rounded-full px-2.5 py-1 text-xs font-semibold" [ngClass]="item.hasDraftChanges ? 'bg-[#FFF0D8] text-[#825100]' : 'bg-[#DDF7EC] text-[#005137]'">{{ item.hasDraftChanges ? 'تعديلات غير منشورة' : 'متزامنة مع النسخة المنشورة' }}</span></div>
+        <p class="mb-0 mt-2 text-sm text-[#3E4947]">{{ item.curriculumName }} · الإصدار المنشور v{{ item.publishedCurriculum.version }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2"><button type="button" (click)="deleteGroup()" class="inline-flex h-10 items-center gap-1 rounded-xl bg-[#FFF0EE] px-4 text-sm font-semibold text-[#BA1A1A]"><span class="material-symbols-outlined text-[18px]">delete</span>حذف المجموعة</button><button type="button" (click)="refreshDraftFromCurriculum()" class="inline-flex h-10 items-center gap-1 rounded-xl bg-[#EFF4FF] px-4 text-sm font-semibold text-[#3E4947]"><span class="material-symbols-outlined text-[18px]">sync</span>تحديث المسودة</button><button type="button" (click)="publishNow()" [disabled]="isPublishing" class="inline-flex h-10 items-center gap-2 rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white disabled:opacity-50"><span class="material-symbols-outlined text-[18px]">publish</span>{{ isPublishing ? 'جاري النشر...' : 'نشر التغييرات' }}</button></div>
+    </div>
+
+    <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div class="rounded-xl bg-[#EFF4FF] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">المنهج</span><strong class="mt-1 block truncate text-sm">{{ item.curriculumName }}</strong></div>
+      <div class="rounded-xl bg-[#EFF4FF] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">المشرف</span><strong class="mt-1 block text-sm">{{ supervisorName }}</strong></div>
+      <div class="rounded-xl bg-[#EFF4FF] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">الطلاب</span><strong class="mt-1 block text-sm">{{ students.length }} طالب</strong></div>
+      <div class="rounded-xl bg-[#EFF4FF] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">تاريخ البداية</span><strong class="mt-1 block text-sm">{{ item.startDate | date:'mediumDate' }}</strong></div>
+      <div class="rounded-xl bg-[#EFF4FF] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">متوسط التقدم</span><strong class="mt-1 block text-sm text-[#004E47]">{{ averageProgress }}%</strong></div>
+    </div>
+  </header>
+
+  <p *ngIf="feedback" class="mb-5 rounded-xl border px-4 py-3 text-sm font-semibold" [ngClass]="feedbackError ? 'border-[#FFDAD6] bg-[#FFDAD6]/40 text-[#93000A]' : 'border-[#A1F1E5] bg-[#EFFBF8] text-[#005137]'">{{ feedback }}</p>
+
+  <section class="mb-6 rounded-xl bg-white p-5 shadow-sm">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div class="max-w-2xl">
+        <h2 class="m-0 text-lg font-bold">المنهج المرتبط بالمجموعة</h2>
+        <p class="mb-0 mt-1 text-xs leading-5 text-[#6E7977]">اختر أي منهج محفوظ في الـBackend. تغيير المنهج يجهز مسودة جديدة للمجموعة فقط، ولن يغيّر ما يراه الطالب قبل الضغط على «نشر التغييرات».</p>
+      </div>
+      <div class="flex w-full flex-col gap-2 sm:flex-row lg:w-auto">
+        <select [(ngModel)]="selectedCurriculumId" class="h-11 min-w-[260px] rounded-xl bg-[#EFF4FF] px-4 text-sm font-semibold outline-none">
+          <option value="" disabled>اختر المنهج</option>
+          <option *ngFor="let curriculum of curriculums" [value]="curriculum.id">{{ curriculum.name }} · {{ curriculum.status === 'ready' ? 'جاهز' : 'مسودة' }}</option>
+        </select>
+        <button type="button" (click)="changeLinkedCurriculum()" [disabled]="!selectedCurriculumId || isChangingCurriculum" class="h-11 rounded-xl bg-[#004E47] px-5 text-sm font-semibold text-white disabled:opacity-50">{{ isChangingCurriculum ? 'جاري الربط...' : 'ربط / تغيير المنهج' }}</button>
+      </div>
+    </div>
+    <div class="mt-4 grid gap-3 sm:grid-cols-2">
+      <div class="rounded-xl bg-[#EFFBF8] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">المنهج المرتبط حاليًا</span><strong class="mt-1 block text-sm text-[#004E47]">{{ item.curriculumName || 'غير مرتبط' }}</strong><span class="mt-1 block break-all text-[10px] text-[#6E7977]">{{ item.curriculumId || '—' }}</span></div>
+      <div class="rounded-xl bg-[#FFF8E8] p-4"><span class="text-[11px] font-semibold text-[#6E7977]">حالة الوصول للطالب</span><strong class="mt-1 block text-sm text-[#825100]">الطالب يرى الإصدار المنشور v{{ item.publishedCurriculum.version }} فقط</strong><span class="mt-1 block text-[10px] text-[#6E7977]">المسودة الحالية لا تظهر للطالب قبل النشر.</span></div>
+    </div>
+  </section>
+
+  <section class="mb-6 rounded-xl bg-white p-5 shadow-sm">
+    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div><h2 class="m-0 text-lg font-bold">النشر وإدارة الإصدارات</h2><p class="mb-0 mt-1 text-xs leading-5 text-[#6E7977]">المسودة الحالية: {{ draftLessonCount }} درس · المنشور: {{ publishedLessonCount }} درس. الطالب يرى النسخة المنشورة فقط.</p></div>
+      <div class="flex flex-wrap items-end gap-2"><label class="text-xs font-semibold text-[#3E4947]">الأسبوع<input [(ngModel)]="weekNumber" type="number" min="1" class="mt-1 h-10 w-24 rounded-lg bg-[#EFF4FF] px-3 outline-none" /></label><label class="text-xs font-semibold text-[#3E4947]">موعد اختياري<input [(ngModel)]="scheduledAt" type="datetime-local" class="mt-1 h-10 rounded-lg bg-[#EFF4FF] px-3 outline-none" /></label><button type="button" (click)="schedule()" class="h-10 rounded-lg bg-[#DAE2FD] px-4 text-xs font-semibold text-[#3F465C]">جدولة النشر</button></div>
+    </div>
+    <div *ngIf="publications.length > 0" class="mt-4 flex flex-wrap gap-2"><span *ngFor="let publication of publications" class="rounded-full px-3 py-1 text-xs font-semibold" [ngClass]="publication.status === 'published' ? 'bg-[#DDF7EC] text-[#005137]' : 'bg-[#FFF0D8] text-[#825100]'">الأسبوع {{ publication.weekNumber }} · {{ publication.status === 'published' ? 'مفتوح' : 'مجدول' }}</span></div>
+  </section>
+
+  <nav class="mb-5 flex items-center gap-1 rounded-xl bg-white p-1.5 shadow-sm">
+    <button type="button" (click)="activeTab = 'plan'" class="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition" [ngClass]="activeTab === 'plan' ? 'bg-[#00685F] text-white' : 'text-[#3E4947] hover:bg-[#EFF4FF]'">خطة المنهج</button>
+    <button type="button" (click)="activeTab = 'students'" class="flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition" [ngClass]="activeTab === 'students' ? 'bg-[#00685F] text-white' : 'text-[#3E4947] hover:bg-[#EFF4FF]'">الطلاب والتقدم</button>
+  </nav>
+
+  <div *ngIf="activeTab === 'plan'" class="space-y-5">
+    <article *ngFor="let week of item.draftCurriculum.weeks; let weekIndex = index" class="overflow-hidden rounded-xl bg-white shadow-sm">
+      <header class="flex flex-col gap-3 border-b border-[#EFF4FF] p-5 sm:flex-row sm:items-center sm:justify-between"><div><div class="flex flex-wrap items-center gap-2"><span class="rounded-md bg-[#00685F] px-2.5 py-1 text-xs font-bold text-white">الأسبوع {{ weekIndex + 1 }}</span><h2 class="m-0 text-base font-bold">{{ week.name }}</h2><span *ngIf="item.hasDraftChanges" class="rounded-full bg-[#FFF0D8] px-2 py-0.5 text-[11px] font-semibold text-[#825100]">ضمن مسودة المجموعة</span></div><span class="mt-1 block text-xs text-[#6E7977]">{{ week.days.length }} أيام</span></div><span class="text-xs text-[#6E7977]">{{ publicationsForWeek(weekIndex + 1).length ? 'له سجل نشر' : 'لم يُفتح كأسبوع مستقل بعد' }}</span></header>
+      <div class="space-y-4 p-5">
+        <section *ngFor="let day of week.days" class="rounded-xl bg-[#EFF4FF] p-4"><div class="mb-3 flex items-center justify-between"><h3 class="m-0 text-sm font-bold">{{ day.name }}</h3><span class="text-xs text-[#6E7977]">{{ day.lessonSlots.length }} درس</span></div><div class="space-y-2"><div *ngFor="let slot of day.lessonSlots; let slotIndex = index" class="flex flex-col gap-2 rounded-lg bg-white p-3 sm:flex-row sm:items-center sm:justify-between"><div class="flex items-center gap-3"><span class="grid h-9 w-9 place-items-center rounded-lg bg-[#E5EEFF] text-xs font-bold text-[#004E47]">{{ slotIndex + 1 }}</span><div><div class="flex flex-wrap items-center gap-2"><span class="rounded-full bg-[#EFF4FF] px-2 py-0.5 text-[10px] font-bold text-[#004E47]">{{ lessonLevel(slot.lessonId) }}</span><strong class="text-sm">{{ lessonTitle(slot.lessonId) }}</strong></div><span class="mt-1 block text-xs text-[#6E7977]">{{ slot.repetitionCount }} تكرارات · {{ slot.required ? 'مطلوب' : 'اختياري' }}</span></div></div></div></div></section>
+      </div>
+    </article>
+    <div *ngIf="item.draftCurriculum.weeks.length === 0" class="rounded-xl border border-dashed border-[#BEC9C6] bg-white p-12 text-center text-sm text-[#6E7977]">لا توجد أسابيع في مسودة المجموعة.</div>
+  </div>
+
+  <section *ngIf="activeTab === 'students'" class="overflow-hidden rounded-xl bg-white shadow-sm">
+    <div class="overflow-x-auto"><table class="w-full min-w-[850px] border-collapse text-right text-sm"><thead><tr class="h-12 bg-[#EFF4FF] text-xs font-semibold text-[#3E4947]"><th class="px-5">الطالب</th><th class="px-4">البريد</th><th class="px-4">التقدم في المنهج</th><th class="px-4">آخر تسجيل</th><th class="px-4">حالة الاشتراك</th></tr></thead><tbody><tr *ngFor="let student of students" class="border-t border-[#EFF4FF] hover:bg-[#F8F9FF]"><td class="px-5 py-4"><div class="flex items-center gap-3"><span class="grid h-9 w-9 place-items-center rounded-full bg-[#DAE2FD] text-xs font-bold text-[#004E47]">{{ student.name.slice(0,1) }}</span><strong>{{ student.name }}</strong></div></td><td class="px-4 py-4 text-xs text-[#6E7977]">{{ student.email }}</td><td class="px-4 py-4"><div class="flex items-center gap-3"><div class="h-2 w-28 overflow-hidden rounded-full bg-[#E5EEFF]"><span class="block h-full rounded-full bg-[#00685F]" [style.width.%]="studentProgress(student)"></span></div><strong class="text-xs text-[#004E47]">{{ studentProgress(student) }}%</strong></div></td><td class="px-4 py-4 text-xs text-[#6E7977]">{{ lastRecordingLabel(student) }}</td><td class="px-4 py-4"><span class="rounded-full bg-[#EFF4FF] px-2.5 py-1 text-xs font-semibold text-[#3E4947]">{{ studentStatus(student) }}</span></td></tr></tbody></table></div>
+    <div *ngIf="students.length === 0" class="p-10 text-center text-sm text-[#6E7977]">لا يوجد طلاب في هذه المجموعة بعد.</div>
+  </section>
+</section>

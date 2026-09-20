@@ -1,0 +1,208 @@
+SHADOWING ENGLISH — MASTER REQUIREMENTS V4
+المرجع المعماري النهائي للنسخة المدمجة
+التاريخ: 18 يوليو 2026
+
+==================================================
+1. قاعدة العمل
+==================================================
+
+- هذه النسخة المدمجة هي مرجع الكود الحالي.
+- لا يتم تركيب Patch قديمة فوقها بدون مقارنة الملفات.
+- لا يتم إنشاء نسخة ثانية من Component موجود.
+- لا يتم تغيير storage key بدون Migration.
+- لا يتم إرسال تعديلات عشوائية متفرقة؛ يتم الدمج ثم Build/Test قبل التسليم.
+
+==================================================
+2. الهدف الحالي
+==================================================
+
+الهدف هو MVP قوي قابل للعرض لمنصة تدريب English Shadowing، خصوصًا لمتدربي Call Center:
+
+- المدرس يرفع Audio أو Video.
+- يقسمه إلى Segments.
+- يضيف English text وArabic translation والتوقيت.
+- يضع Lesson داخل Curriculum.
+- ينشئ Group من Curriculum.
+- يعدل Group Draft ثم ينشره.
+- الطالب يرى Published فقط.
+- الطالب يسمع Segment ثم يسجل تكراره.
+- يتم حفظ Progress ويشاهده المدرس.
+
+==================================================
+3. المعمارية المعتمدة
+==================================================
+
+Lesson Library
+→ Curriculum Library Template
+→ Create Group with Curriculum
+→ Private Group Curriculum Copy
+→ Group Draft
+→ Publish
+→ Published Group Curriculum for Students
+→ Progress per Curriculum Slot
+
+القواعد:
+
+- Lesson مستقلة وقابلة لإعادة الاستخدام.
+- Curriculum تخزن lessonId داخل Slot، ولا تنسخ محتوى Lesson.
+- Slot لها repetitionCount وrequired وorder مستقلون.
+- Group تحصل على Private Copy من Curriculum عند الإنشاء.
+- تعديل Curriculum Template لا يغيّر Groups الموجودة تلقائيًا.
+- تعديل Lesson content يظهر في كل Slot تشير إلى نفس lessonId.
+- كل Student تنتمي إلى Group واحدة.
+- الطالب لا يختار Curriculum بنفسه.
+- الطالب يرى Published Group Curriculum فقط.
+- Progress identity: studentId + groupId + curriculumSlotId.
+
+==================================================
+4. Lesson Library
+==================================================
+
+العمليات الموجودة والمعتمدة:
+
+- Create.
+- Edit.
+- Duplicate مع ID وMedia جديدين.
+- Archive وUnarchive.
+- Download Metadata JSON.
+- Export كامل Metadata + Segments + Media.
+- Import كامل مع Schema validation.
+- Safe Permanent Delete.
+
+قواعد Delete:
+
+- إذا كانت Lesson مستخدمة في Curriculum أو Group Draft أو Group Published يتم منع الحذف.
+- يعرض النظام أماكن الاستخدام ويقترح Archive أو إزالة المراجع أولًا.
+- إذا لم تكن مستخدمة، يحذف Metadata وMedia وProgress وRecordings المرتبطة.
+- لا يتم حذف Curriculum أو Group بسبب حذف Lesson.
+
+قواعد Export/Import:
+
+- الملف الكامل امتداده .shadowlesson.zip.
+- يحتوي lesson.json وملف Media داخل media/.
+- لا يحتوي Students أو Groups أو Progress أو Student Recordings أو Passwords.
+- Import لا يضيف Lesson إلى Curriculum تلقائيًا.
+- عند تعارض ID يتم إنشاء Imported Copy بمعرّف جديد وحالة Draft.
+
+==================================================
+5. Curriculum Library
+==================================================
+
+- Create / Duplicate / Archive Curriculum.
+- Add Week وAdd Day.
+- Add existing Lesson.
+- Update / Copy / Move / Replace / Remove Slot.
+- Slot repetitions لا تغير Lesson default repetitions.
+- حذف Slot لا يحذف Lesson.
+- Archive Curriculum لا تحذف Group Copies.
+
+==================================================
+6. Groups
+==================================================
+
+Create Group يتطلب:
+
+- Name.
+- Curriculum.
+- Start Date.
+
+Group Draft operations:
+
+- Add Lesson.
+- Update repetitions/required.
+- Remove.
+- Copy بمعرّف Slot جديد.
+- Move مع الحفاظ على Slot ID.
+- Replace Lesson مع الحفاظ على موضع Slot وإعادة Progress للدرس الجديد.
+- Publish.
+- Reset Draft.
+- Save As New Curriculum.
+- Change Curriculum مع Confirm.
+
+الطالب لا يرى أي تعديل Draft قبل Publish.
+
+==================================================
+7. Student وProgress
+==================================================
+
+مصدر رحلة الطالب:
+
+Student Account
+→ Group
+→ Published Group Curriculum
+→ Weeks / Days / Slots
+→ Lesson content by lessonId
+
+- weekName/dayName داخل Lesson حقول Legacy فقط.
+- نفس Lesson يمكن وضعها عدة مرات بتقدم مستقل.
+- Add Student ينشئ Progress للـPublished Slots الخاصة بمجموعته فقط.
+- Move Student يحافظ على الحساب ويوقف Progress المجموعة القديمة في الـBackend.
+- حذف Slot يجعل Progress غير نشط ولا يمسح التاريخ مباشرة.
+- Move Slot يحافظ على Progress.
+- Replace Lesson يصفر Progress الخاص بالـSlot لأن المحتوى تغير.
+- Recording context يحتوي curriculumSlotId.
+
+==================================================
+8. Backend MVP
+==================================================
+
+المحفوظ في SQL Server:
+
+- Lessons.
+- Lesson Segments.
+- Lesson Media.
+- Published Group Curriculum snapshots.
+- Student Progress.
+
+المحلي مؤقتًا:
+
+- Demo Auth.
+- Accounts وTemporary Passwords.
+- Curriculum Templates وGroup Drafts مع fallback داخل Browser Storage.
+- Student Recording files داخل IndexedDB.
+
+لا يتم إنشاء Backend أو Database ثانية.
+كل Migration تعمل على ShadowingEnglishMvp الحالية.
+
+==================================================
+9. اختبارات القبول الإلزامية
+==================================================
+
+1. نفس Lesson في Slot 3 repetitions وSlot آخر 10؛ الإكمال مستقل.
+2. Add إلى Group Draft لا يظهر للطالب قبل Publish.
+3. Publish يجعل الإضافة أو الحذف تظهر للطالب.
+4. تعديل Segment داخل Lesson يظهر في كل Slot تحمل نفس lessonId.
+5. Move Slot يحتفظ بالتقدم.
+6. Replace Lesson يصفر Progress الخاص بهذا Slot.
+7. Export ثم Import يعيدان Media وSegments صحيحة.
+8. Safe Delete يمنع حذف Lesson مستخدمة ويعرض المكان.
+9. Safe Delete لدرس غير مستخدم ينظف Blobs والسجلات.
+10. Archive لدرس مستخدم لا يكسر Published Student Course.
+11. نقل Student يوقف ظهوره في Progress المجموعة القديمة بعد المزامنة.
+
+==================================================
+10. خارج نطاق MVP الحالي
+==================================================
+
+- Production JWT/Auth وPassword hashing.
+- تخزين كل Accounts وGroups وDrafts مركزيًا بالكامل.
+- رفع Student Recordings إلى Cloud/Server.
+- Automatic transcription.
+- Pronunciation scoring بالذكاء الاصطناعي.
+- Advanced analytics وشعارات أو شهادات التقدم.
+- Notifications وBilling وSubscriptions.
+- تطبيق Native منفصل. يمكن لاحقًا تحويل Angular إلى PWA أو تغليفه بـCapacitor دون تغيير فكرة الـBackend.
+
+==================================================
+11. تحذيرات للمطور القادم
+==================================================
+
+- لا تعرض كل Lesson Library للطالب.
+- لا تعتمد على lessonId وحده كهوية Progress.
+- لا تجعل Curriculum Template تعمل Auto-sync إلى Groups.
+- لا تحذف LocalStorage لحل مشكلة Lesson واحدة.
+- لا تنس IndexedDB عند حذف Media أو Recording.
+- لا تعيد بناء Lesson Player أو Lesson Builder من الصفر.
+- اختبر Build وTests بعد أي Merge.
+
+END OF MASTER REQUIREMENTS V4

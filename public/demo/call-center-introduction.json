@@ -1,0 +1,45 @@
+{
+    "id":  "lesson-demo-call-center",
+    "title":  "Call Center: Greeting a Customer",
+    "description":  "Portable demo lesson generated with the English voice installed in Windows.",
+    "status":  "ready",
+    "weekName":  "Week 1",
+    "dayName":  "Day 1",
+    "requiredRepetitions":  3,
+    "mediaFileName":  "call-center-introduction.wav",
+    "mediaType":  "audio/wav",
+    "segments":  [
+                     {
+                         "text":  "Hello, thank you for calling customer service.",
+                         "translation":  "مرحبًا، شكرًا لاتصالك بخدمة العملاء.",
+                         "start":  0,
+                         "end":  4.109
+                     },
+                     {
+                         "text":  "My name is Khaled. How can I help you today?",
+                         "translation":  "اسمي خالد. كيف يمكنني مساعدتك اليوم؟",
+                         "start":  5.009,
+                         "end":  9.478
+                     },
+                     {
+                         "text":  "I understand your concern, and I will check that for you.",
+                         "translation":  "أتفهم مشكلتك، وسأتحقق من ذلك من أجلك.",
+                         "start":  10.378,
+                         "end":  14.931
+                     },
+                     {
+                         "text":  "Thank you for your patience. Is there anything else I can help you with?",
+                         "translation":  "شكرًا لصبرك. هل يوجد شيء آخر يمكنني مساعدتك فيه؟",
+                         "start":  15.831,
+                         "end":  21.545
+                     }
+                 ],
+    "scriptLines":  [
+                        "Hello, thank you for calling customer service.",
+                        "My name is Khaled. How can I help you today?",
+                        "I understand your concern, and I will check that for you.",
+                        "Thank you for your patience. Is there anything else I can help you with?"
+                    ],
+    "createdAt":  "2026-07-16T18:43:51.9520909Z",
+    "updatedAt":  "2026-07-16T18:43:51.9520909Z"
+}

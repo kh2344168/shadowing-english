@@ -1,0 +1,484 @@
+<section class="stage-page" dir="rtl" aria-labelledby="stage-title">
+  <div *ngIf="loading()" class="student-loading" role="status">بنجهز المرحلة...</div>
+
+  <ng-container *ngIf="!loading() && lessonView as view">
+    <ng-container *ngIf="stage as currentStage">
+      <header class="stage-context">
+        <div class="stage-context__top">
+          <a
+            [routerLink]="['/student/lessons', view.lesson.id]"
+            [queryParams]="{ slotId: view.curriculumSlotId }"
+            class="stage-context__back"
+            aria-label="العودة لمراحل الدرس"
+          >
+            <span aria-hidden="true">→</span><strong>العودة إلى مراحل الدرس</strong>
+          </a>
+          <div class="stage-context__title">
+            <h1 id="stage-title">الدرس {{ view.lessonOrder + 1 }} — {{ view.lesson.title }}</h1>
+            <span [title]="currentStage.description">المرحلة {{ view.stages.indexOf(currentStage) + 1 }}: {{ currentStage.label }} · {{ currentStage.durationMinutes }} دقائق</span>
+          </div>
+          <a
+            [routerLink]="['/student/lessons', view.lesson.id]"
+            [queryParams]="{ slotId: view.curriculumSlotId }"
+            class="stage-context__close"
+            aria-label="إغلاق المرحلة"
+          >×</a>
+        </div>
+
+        <div class="stage-context__progress">
+          <div>
+            <i
+              *ngFor="let lessonStage of view.stages"
+              [class.is-completed]="lessonStage.status === 'completed'"
+              [class.is-current]="lessonStage.id === stageId"
+            ></i>
+          </div>
+          <strong>{{ view.completedStageCount + (currentStage.status === 'completed' ? 0 : 1) }} / {{ view.stages.length }}</strong>
+        </div>
+      </header>
+
+      <main [ngSwitch]="currentStage.activityType" class="stage-arena">
+        <ng-container *ngSwitchCase="'vocabulary'">
+          <section class="tool-intro tool-intro--compact">
+            <span class="tool-intro__icon">Aa</span>
+            <h2>بطاقات الكلمات والعبارات</h2>
+            <p>استمع للكلمة، حاول تذكّر معناها، ثم حدّد إن كنت تعرفها.</p>
+            <small>{{ vocabularyWordCount }} كلمات · {{ vocabularyChunkCount }} تعبيرات</small>
+          </section>
+
+          <ng-container *ngIf="vocabularyCard as card; else noVocabulary">
+            <div class="flash-progress">
+              <strong>البطاقة {{ activeIndex + 1 }} من {{ vocabulary.length }}</strong>
+              <div><i [style.width.%]="((activeIndex + 1) / vocabulary.length) * 100"></i></div>
+              <span>{{ ((activeIndex + 1) / vocabulary.length) * 100 | number:'1.0-0' }}%</span>
+            </div>
+
+            <div class="flash-deck">
+              <span class="flash-deck__layer flash-deck__layer--one"></span>
+              <span class="flash-deck__layer flash-deck__layer--two"></span>
+
+              <article
+                class="flash-card"
+                [attr.data-card-index]="activeIndex"
+                [attr.data-card-term]="card.term"
+                [class.is-know-exit]="vocabularyAnimation === 'know-exit'"
+                [class.is-review-exit]="vocabularyAnimation === 'review-exit'"
+                [class.is-entering]="vocabularyAnimation === 'enter'"
+              >
+                <div class="flash-card__rotator" [class.is-revealed]="vocabularyRevealed">
+                <div class="flash-card__front">
+                  <div class="flash-card__image" [class.has-no-image]="!hasVocabularyImage(card)">
+                    <img
+                      *ngIf="hasVocabularyImage(card); else vocabularyWithoutImage"
+                      [src]="card.imageUrl"
+                      [alt]="card.imageAlt || card.term"
+                      (error)="onVocabularyImageError(card.imageUrl)"
+                    />
+                    <a *ngIf="card.imageProvider === 'curated'" href="https://www.pexels.com" target="_blank" rel="noopener" class="absolute bottom-2 left-2 rounded bg-white/90 px-2 py-1 text-[9px] font-bold text-slate-600">Pexels</a>
+                    <ng-template #vocabularyWithoutImage>
+                      <div class="flash-card__placeholder"><span>Aa</span><small>ركّز على الكلمة ونطقها</small></div>
+                    </ng-template>
+                    <span class="flash-card__kind">{{ card.kind === 'chunk' ? 'CHUNK' : 'WORD' }}</span>
+                  </div>
+                  <div class="flash-card__word" dir="ltr">
+                    <h2>{{ card.term }}</h2>
+                    <button type="button" (click)="speakVocabulary(card.term)" aria-label="اسمع نطق الكلمة">🔊</button>
+                  </div>
+                </div>
+
+                <div class="flash-card__back">
+                  <div class="flash-card__back-top">
+                    <span>↻ مضافة للمراجعة</span>
+                    <button type="button" (click)="speakVocabulary(card.term)" aria-label="اسمع النطق مرة أخرى">🔊</button>
+                  </div>
+                  <div class="flash-card__meaning">
+                    <small dir="ltr">{{ card.term }}</small>
+                    <h2>{{ card.translation }}</h2>
+                    <p *ngIf="card.explanation" dir="ltr">{{ card.explanation }}</p>
+                    <blockquote *ngIf="card.example" dir="ltr">“{{ card.example }}”</blockquote>
+                    <p *ngIf="card.extraExample" dir="ltr">{{ card.extraExample }}</p>
+                    <p *ngIf="card.usageNote" class="flash-card__tip">💡 {{ card.usageNote }}</p>
+                  </div>
+                  <button type="button" class="tool-primary" (click)="nextVocabularyCard('review')" [disabled]="vocabularyAnimation !== 'idle'">
+                    {{ activeIndex === vocabulary.length - 1 ? 'خلصت الكلمات — كمل' : 'التالي' }} <b>←</b>
+                  </button>
+                </div>
+                </div>
+              </article>
+            </div>
+
+            <div *ngIf="!vocabularyRevealed" class="flash-actions">
+              <button type="button" class="tool-secondary" (click)="revealVocabularyCard()" [disabled]="vocabularyAnimation !== 'idle'"><span>؟</span> مش عارف</button>
+              <button type="button" class="tool-primary" (click)="nextVocabularyCard('know')" [disabled]="vocabularyAnimation !== 'idle'"><span>✓</span> عارف</button>
+            </div>
+          </ng-container>
+
+          <ng-template #noVocabulary>
+            <section class="tool-empty">
+              <span>Aa</span><h2>لا توجد بطاقات معتمدة</h2><p>المدرس لم يحدد كلمات مستقلة لهذا الدرس.</p>
+              <button type="button" class="tool-primary" (click)="skipEmptyVocabulary()">انتقل للمرحلة التالية</button>
+            </section>
+          </ng-template>
+        </ng-container>
+
+        <ng-container *ngSwitchCase="'listen-write'">
+          <ng-container *ngIf="dictationSegment as segment; else noDictationSentences">
+            <audio #dictationAudio *ngIf="mediaUrl" [src]="mediaUrl" preload="metadata" class="hidden"></audio>
+
+            <section class="dictation-card">
+              <div class="dictation-card__counter">
+                <span>المرحلة: اسمع واكتب</span>
+                <strong>الجملة {{ activeIndex + 1 }} من {{ dictationSegments.length }}</strong>
+              </div>
+
+              <div class="dictation-player">
+                <button type="button" (click)="playDictationSentence()" [disabled]="!mediaUrl" aria-label="تشغيل الجملة">
+                  <span>🔊</span>
+                </button>
+                <div>
+                  <button type="button" class="tool-secondary" (click)="playDictationSentence()" [disabled]="!mediaUrl">↻ إعادة الاستماع</button>
+                  <span>استمع جيدًا ثم اكتب ما تسمعه</span>
+                </div>
+              </div>
+
+              <label class="dictation-field">
+                <span><strong>اكتب ما تسمعه بالإنجليزية</strong><small>حساسية التهجئة مفعلة</small></span>
+                <div>
+                  <textarea rows="3" [(ngModel)]="dictationAnswer" [disabled]="dictationCorrect" dir="ltr" autocomplete="off" placeholder="Write what you hear..."></textarea>
+                  <button type="button" (click)="dictationAnswer = ''" [disabled]="dictationCorrect || !dictationAnswer">⌫ مسح</button>
+                  <small>EN-US</small>
+                </div>
+              </label>
+
+              <button *ngIf="!dictationSubmitted" type="button" class="tool-primary dictation-submit" (click)="submitDictation()" [disabled]="!dictationAnswer.trim()">
+                ✓ تحقق من الإجابة
+              </button>
+
+              <section *ngIf="dictationSubmitted" class="dictation-feedback" [class.is-wrong]="!dictationCorrect">
+                <header>
+                  <span>{{ dictationCorrect ? '✓' : '×' }}</span>
+                  <div><h2>{{ dictationCorrect ? 'إجابة صحيحة! أحسنت 👏' : 'راجع الكلمات المختلفة' }}</h2><p>{{ dictationCorrect ? 'سمعت الكلمات وكتبتها بدقة.' : 'قارن إجابتك مع التحليل التفصيلي.' }}</p></div>
+                </header>
+
+                <div *ngIf="dictationTokenReview.length" class="token-review" dir="ltr">
+                  <span
+                    *ngFor="let token of dictationTokenReview"
+                    [class.is-correct]="token.status === 'correct'"
+                    [class.is-missing]="token.status === 'missing'"
+                    [class.is-extra]="token.status === 'extra'"
+                  >{{ token.status === 'extra' ? '+' : token.status === 'missing' ? '−' : '' }}{{ token.text }}</span>
+                </div>
+
+                <div *ngIf="!dictationCorrect && dictationHint" class="dictation-hint" dir="ltr">💡 {{ dictationHint }}</div>
+                <p *ngIf="!dictationCorrect && showDictationAnswer" class="dictation-answer" dir="ltr">{{ dictationItem?.acceptedAnswers?.[0] || segment.text }}</p>
+
+                <form *ngIf="!dictationCorrect && dictationCorrectionTarget" class="dictation-correction" (ngSubmit)="submitDictationCorrection()">
+                  <label><span>اكتب الجزء الناقص فقط</span><input name="dictationCorrection" [(ngModel)]="dictationCorrectionAnswer" dir="ltr" autocomplete="off" placeholder="الكلمات الناقصة" /></label>
+                  <button type="submit" class="tool-primary" [disabled]="!dictationCorrectionAnswer.trim()">تطبيق</button>
+                  <small *ngIf="dictationCorrectionError">{{ dictationCorrectionError }}</small>
+                </form>
+
+                <div *ngIf="!dictationCorrect" class="tool-action-row">
+                  <button type="button" class="tool-secondary" (click)="retryDictation()">أحاول مرة ثانية</button>
+                  <button *ngIf="!showDictationAnswer" type="button" class="tool-secondary" (click)="revealDictationAnswer()">إظهار الإجابة</button>
+                  <button *ngIf="showDictationAnswer" type="button" class="tool-primary" (click)="nextDictation()">{{ activeIndex === dictationSegments.length - 1 ? 'إنهاء المرحلة' : 'الجملة التالية' }}</button>
+                </div>
+                <button *ngIf="dictationCorrect" type="button" class="tool-primary dictation-next" (click)="nextDictation()">{{ activeIndex === dictationSegments.length - 1 ? 'إنهاء المرحلة' : 'الجملة التالية' }} ←</button>
+              </section>
+            </section>
+          </ng-container>
+
+          <ng-template #noDictationSentences>
+            <section class="tool-empty"><span>🎧</span><h2>لا توجد جمل معتمدة</h2><button type="button" class="tool-primary" (click)="skipEmptyDictation()">انتقل للمرحلة التالية</button></section>
+          </ng-template>
+        </ng-container>
+
+        <ng-container *ngSwitchCase="'quiz'">
+          <ng-container *ngIf="quizQuestion as question; else noQuizQuestions">
+            <section class="quiz-card">
+              <div class="quiz-card__top"><span>سؤال {{ activeIndex + 1 }} / {{ quizQuestions.length }}</span><b>{{ question.type === 'word-order' ? 'رتّب الكلمات' : question.type === 'vocabulary-card' ? 'اختبار كلمة' : 'اختيار من متعدد' }}</b></div>
+              <h2 [class.is-flash]="question.type === 'vocabulary-card'">{{ question.prompt }}</h2>
+
+              <div *ngIf="question.type !== 'word-order'" class="quiz-options">
+                <button
+                  *ngFor="let option of question.options; let optionIndex = index"
+                  type="button"
+                  (click)="selectQuizOption(option)"
+                  [disabled]="quizSubmitted"
+                  [class.is-selected]="quizSelectedOption === option"
+                  [class.is-correct]="quizSubmitted && option === question.correctAnswer"
+                  [class.is-wrong]="quizSubmitted && quizSelectedOption === option && !quizCorrect"
+                ><span>{{ optionIndex + 1 }}</span><b dir="auto">{{ option }}</b></button>
+              </div>
+
+              <ng-container *ngIf="question.type === 'word-order'">
+                <div class="word-order-answer" [class.is-empty]="quizOrderedWordIndexes.length === 0" dir="ltr">
+                  <button *ngFor="let optionIndex of quizOrderedWordIndexes; let position = index" type="button" (click)="removeQuizWord(position)" [disabled]="quizSubmitted">{{ question.options[optionIndex] }}</button>
+                  <span *ngIf="quizOrderedWordIndexes.length === 0">اضغط الكلمات بالترتيب الصحيح</span>
+                </div>
+                <div class="word-order-bank" dir="ltr">
+                  <button *ngFor="let optionIndex of quizRemainingWordIndexes" type="button" (click)="addQuizWord(optionIndex)" [disabled]="quizSubmitted">{{ question.options[optionIndex] }}</button>
+                </div>
+              </ng-container>
+
+              <div *ngIf="quizSubmitted" class="quiz-feedback" [class.is-wrong]="!quizCorrect">
+                <strong>{{ quizCorrect ? 'إجابة صحيحة — ممتاز.' : 'الإجابة تحتاج مراجعة.' }}</strong>
+                <span *ngIf="!quizCorrect" dir="auto">الإجابة الصحيحة: {{ question.correctAnswer }}</span>
+                <small *ngIf="question.feedback">{{ question.feedback }}</small>
+              </div>
+
+              <button *ngIf="!quizSubmitted" type="button" class="tool-primary quiz-submit" (click)="submitQuizAnswer()" [disabled]="question.type === 'word-order' ? quizOrderedWordIndexes.length === 0 : !quizSelectedOption">تحقق من الإجابة</button>
+              <div *ngIf="quizSubmitted" class="tool-action-row">
+                <button *ngIf="!quizCorrect" type="button" class="tool-secondary" (click)="retryQuizAnswer()">أحاول مرة ثانية</button>
+                <button type="button" class="tool-primary" (click)="nextQuizQuestion()">{{ activeIndex === quizQuestions.length - 1 ? 'إنهاء الاختبار' : 'السؤال التالي' }}</button>
+              </div>
+            </section>
+          </ng-container>
+          <ng-template #noQuizQuestions>
+            <section class="tool-empty"><span>✓</span><h2>لا توجد أسئلة معتمدة</h2><button type="button" class="tool-primary" (click)="skipEmptyQuiz()">انتقل للمرحلة التالية</button></section>
+          </ng-template>
+        </ng-container>
+
+        <ng-container *ngSwitchCase="'ai-conversation'">
+          <ng-container *ngIf="conversationConfig as config; else noConversation">
+            <section class="conversation-app" [class.is-complete]="conversationComplete">
+              <header class="conversation-app__header">
+                <div class="conversation-contact">
+                  <div class="conversation-contact__avatar" aria-hidden="true">AI<span></span></div>
+                  <div>
+                    <div class="conversation-contact__name">
+                      <strong>Alex — رفيق التحدث الذكي</strong>
+                      <span>AI Tutor</span>
+                    </div>
+                    <small><i></i> متصل الآن · يتحدث بالإنجليزية ({{ config.level }} Level)</small>
+                  </div>
+                </div>
+
+                <div class="conversation-header-actions">
+                  <div class="conversation-turn-progress" aria-label="تقدم المحادثة">
+                    <span>الجولة <b>{{ conversationCurrentTurn }}</b> من {{ conversationDisplayTargetTurns }}</span>
+                    <div><i [style.width.%]="conversationProgressPercent"></i></div>
+                  </div>
+                </div>
+              </header>
+
+              <section *ngIf="!conversationStarted" class="conversation-role-gate">
+                <span class="conversation-role-gate__icon">💬</span>
+                <h2>{{ config.topic || view.lesson.title }}</h2>
+                <p>{{ config.scenario || 'أجرِ محادثة قصيرة بالإنجليزية مستخدمًا ما تعلمته في الدرس.' }}</p>
+
+                <ng-container *ngIf="shouldChooseConversationRole; else simpleConversationStart">
+                  <h3>اختار إنت هتكون مين في الموقف</h3>
+                  <div class="conversation-role-options">
+                    <button *ngFor="let role of conversationRoleOptions" type="button" (click)="selectConversationRole(role.id)" [class.is-selected]="selectedConversationRoleId === role.id">
+                      <b>{{ role.studentRole }}</b>
+                      <span>{{ role.label }}</span>
+                      <small>الذكاء الاصطناعي سيكون: {{ role.aiRole }}</small>
+                    </button>
+                  </div>
+                  <button type="button" class="conversation-start-btn" (click)="startConversation()" [disabled]="!selectedConversationRoleId">ابدأ المحادثة</button>
+                </ng-container>
+
+                <ng-template #simpleConversationStart>
+                  <button type="button" class="conversation-start-btn" (click)="startConversation()">ابدأ المحادثة</button>
+                </ng-template>
+              </section>
+
+              <ng-container *ngIf="conversationStarted">
+                <section #conversationChat class="conversation-chat" dir="ltr" aria-live="polite">
+                  <div class="conversation-date-badge">اليوم · Today</div>
+
+                  <ng-container *ngFor="let message of conversationMessages; let messageIndex = index">
+                    <div class="conversation-message-row" [class.is-student]="message.role === 'student'">
+                      <article class="conversation-message" [class.is-student]="message.role === 'student'" [class.is-voice]="message.deliveryMode === 'voice'">
+                        <ng-container *ngIf="message.role === 'assistant' && message.deliveryMode === 'voice'; else regularConversationMessage">
+                          <div class="conversation-ai-voice-note">
+                            <button
+                              type="button"
+                              (click)="playConversationAssistantVoice(messageIndex, message.text)"
+                              [attr.aria-label]="conversationPlayingAssistantIndex === messageIndex ? 'إيقاف صوت Alex' : 'تشغيل صوت Alex'"
+                            >{{ conversationPlayingAssistantIndex === messageIndex ? 'Ⅱ' : '▶' }}</button>
+                            <div>
+                              <div class="conversation-waveform conversation-waveform--assistant" aria-hidden="true">
+                                <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                              </div>
+                              <small><span>Alex · Voice</span><b>AI</b></small>
+                            </div>
+                          </div>
+                          <p *ngIf="isConversationAssistantTranscriptVisible(messageIndex)" class="conversation-assistant-transcript" dir="ltr">{{ message.text }}</p>
+                          <div class="conversation-voice-help" dir="rtl">
+                            <button *ngIf="!isConversationAssistantTranscriptVisible(messageIndex)" type="button" (click)="revealConversationAssistantTranscript(messageIndex, false)">مش فاهم الكلام؟ اعرض النص</button>
+                            <button *ngIf="isConversationAssistantTranscriptVisible(messageIndex)" type="button" (click)="playConversationAssistantVoice(messageIndex, message.text, true)">🐢 اسمع ببطء</button>
+                          </div>
+                        </ng-container>
+
+                        <ng-template #regularConversationMessage>
+                          <ng-container *ngIf="message.role === 'student' && conversationVoiceNoteForMessage(messageIndex) as voiceNote">
+                            <div class="conversation-voice-note">
+                              <button
+                                type="button"
+                                (click)="playConversationVoiceNote(conversationStudentTurnForMessage(messageIndex))"
+                                [attr.aria-label]="conversationPlayingVoiceTurn === conversationStudentTurnForMessage(messageIndex) ? 'إيقاف التسجيل' : 'تشغيل التسجيل الصوتي'"
+                              >{{ conversationPlayingVoiceTurn === conversationStudentTurnForMessage(messageIndex) ? 'Ⅱ' : '▶' }}</button>
+                              <div>
+                                <div class="conversation-waveform" aria-hidden="true">
+                                  <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                                <small><span>{{ formatConversationDuration(voiceNote.durationSeconds) }}</span><b>🎙 صوتك</b></small>
+                              </div>
+                            </div>
+                          </ng-container>
+                          <p>{{ message.text }}</p>
+                        </ng-template>
+
+                        <footer><span>{{ message.role === 'student' ? '✓✓' : '' }}</span><small>الآن</small></footer>
+                      </article>
+
+                      <ng-container *ngIf="message.role === 'student' && conversationFeedbackForMessage(messageIndex) as item">
+                        <details
+                          *ngIf="item.feedback.evaluation !== 'good' || item.feedback.spellingCorrections.length || item.feedback.grammarExplanationArabic || item.feedback.betterAnswer"
+                          class="conversation-inline-feedback"
+                          [open]="item.feedback.needsRetry || item.feedback.spellingCorrections.length > 0 || !!item.feedback.grammarExplanationArabic"
+                        >
+                          <summary>
+                            <span>💡 <b>{{ conversationFeedbackLabel(item.feedback) }}</b></span>
+                            <small>{{ item.feedback.needsRetry ? 'محتاج إعادة' : 'ملاحظة اختيارية' }}</small>
+                          </summary>
+
+                          <div *ngIf="item.feedback.spellingCorrections.length" class="conversation-spelling-list">
+                            <small>{{ message.deliveryMode === 'voice' ? 'تصحيح كلمات من النص الملتقط' : 'تصحيح كلمات وكتابة' }}</small>
+                            <span *ngFor="let correction of item.feedback.spellingCorrections" dir="ltr"><del>{{ correction.wrong }}</del> → <b>{{ correction.correct }}</b></span>
+                          </div>
+
+                          <p *ngIf="item.feedback.grammarExplanationArabic"><b>{{ message.deliveryMode === 'voice' ? 'Grammar في الكلام:' : 'Grammar:' }}</b> {{ item.feedback.grammarExplanationArabic }}</p>
+                          <p *ngIf="message.deliveryMode === 'voice'" class="conversation-transcript-disclaimer">تقييم الريكورد مبني على النص الذي التقطه المتصفح، وليس تقييمًا للـaccent أو دقة النطق.</p>
+                          <p *ngIf="item.feedback.feedbackArabic && !item.feedback.grammarExplanationArabic">{{ item.feedback.feedbackArabic }}</p>
+
+                          <div *ngIf="item.feedback.correctedAnswer && item.feedback.correctedAnswer !== item.answer">
+                            <small>التصحيح البسيط</small><span dir="ltr">{{ item.feedback.correctedAnswer }}</span>
+                          </div>
+                          <div *ngIf="item.feedback.betterAnswer && !item.feedback.needsRetry">
+                            <small>صياغة أقوى لو حبيت</small><button type="button" dir="ltr" (click)="useSuggestedReply(item.feedback.betterAnswer)">{{ item.feedback.betterAnswer }}</button>
+                          </div>
+                          <button *ngIf="item.feedback.needsRetry" type="button" class="conversation-retry-answer" (click)="retryConversationAnswer()">أكتب الإجابة مرة أخرى</button>
+                        </details>
+                      </ng-container>
+                    </div>
+                  </ng-container>
+
+                  <div *ngIf="conversationBusy" class="conversation-typing-bubble">
+                    <span></span><span></span><span></span><small>{{ conversationLastInputMode === 'voice' ? 'Alex يحضر ردًا صوتيًا...' : 'Alex يكتب...' }}</small>
+                  </div>
+
+                  <section *ngIf="conversationComplete" class="conversation-chat-complete" dir="rtl">
+                    <span>✓</span>
+                    <div>
+                      <h2>أحسنت، المحادثة انتهت بشكل طبيعي.</h2>
+                      <p>{{ conversationLearningTurns }} جولات تدريب · {{ conversationGoodAnswerCount }} إجابات قوية · {{ conversationCorrectionCount }} ملاحظات · {{ conversationUsedPhraseCount }} تعبيرات من الدرس</p>
+                    </div>
+                  </section>
+                </section>
+
+                <div *ngIf="conversationError" class="conversation-error conversation-error--chat" role="alert">
+                  <strong>تعذر الاتصال بالمحادثة</strong>
+                  <p>{{ conversationError }}</p>
+                  <small>إجابتك ما زالت موجودة ويمكنك إعادة الإرسال.</small>
+                </div>
+
+                <footer *ngIf="!conversationComplete" class="conversation-composer" dir="rtl">
+                  <div class="conversation-mode-switch" role="group" aria-label="طريقة الرد">
+                    <button type="button" [class.is-active]="conversationComposerMode === 'text'" (click)="setConversationComposerMode('text')" [disabled]="conversationBusy || conversationRecording">💬 شات</button>
+                    <button type="button" [class.is-active]="conversationComposerMode === 'voice'" (click)="setConversationComposerMode('voice')" [disabled]="conversationBusy || conversationRecording">🎙 ريكورد</button>
+                  </div>
+                  <p class="conversation-mode-help">{{ conversationComposerMode === 'text' ? 'الشات: نراجع الإملاء + اختيار الكلمات + الجرامر.' : 'الريكورد: نحفظ صوتك ونراجع النص الملتقط + اختيار الكلمات + الجرامر، بدون ادعاء تقييم الـaccent.' }}</p>
+                  <div *ngIf="conversationComposerMode === 'text' && conversationSuggestedReplies.length" class="conversation-hint-toggle-row">
+                    <button type="button" class="conversation-hint-toggle" (click)="toggleConversationHints()" [disabled]="conversationBusy || conversationRecording">
+                      💡 {{ conversationHintsVisible ? 'إخفاء الاقتراحات' : 'هل تريد اقتراحات للرد؟' }}
+                    </button>
+                  </div>
+
+                  <div *ngIf="conversationComposerMode === 'text' && conversationHintsVisible && conversationSuggestedReplies.length" class="conversation-quick-replies">
+                    <span>اختار اقتراحًا فقط لو محتاج مساعدة:</span>
+                    <div dir="ltr">
+                      <button *ngFor="let suggestion of conversationSuggestedReplies" type="button" (click)="useSuggestedReply(suggestion)" [disabled]="conversationBusy || conversationRecording">{{ suggestion }}</button>
+                    </div>
+                  </div>
+
+                  <div *ngIf="conversationComposerMode === 'voice' && conversationRecording" class="conversation-recording-status">
+                    <span class="conversation-recording-dot"></span>
+                    <strong>جاري التسجيل {{ formatConversationDuration(conversationRecordingSeconds) }}</strong>
+                    <small *ngIf="conversationRecordingInterim" dir="ltr">{{ conversationRecordingInterim }}</small>
+                    <button type="button" (click)="stopConversationRecording()">إيقاف</button>
+                  </div>
+
+                  <div *ngIf="conversationComposerMode === 'voice' && pendingConversationVoiceNote && !conversationRecording" class="conversation-recording-ready">
+                    <span>🎙 تسجيل جاهز · {{ formatConversationDuration(pendingConversationVoiceNote.durationSeconds) }}</span>
+                    <small>راجع النص لو Speech Recognition فهم كلمة غلط. رد Alex هيكون صوتيًا.</small>
+                    <button type="button" (click)="cancelPendingConversationVoiceNote()">حذف التسجيل</button>
+                  </div>
+
+                  <p *ngIf="conversationMicError" class="conversation-mic-error">{{ conversationMicError }}</p>
+
+                  <form *ngIf="conversationComposerMode === 'text'" (ngSubmit)="sendConversationMessage()" class="conversation-input-row" dir="ltr">
+                    <div class="conversation-text-box">
+                      <button type="button" class="conversation-emoji-btn" (click)="insertConversationEmoji()" aria-label="إضافة رمز تعبيري">☺</button>
+                      <input #conversationTextInput name="conversationInput" [(ngModel)]="conversationInput" [disabled]="conversationBusy" autocomplete="off" placeholder="Type your reply in English..." aria-label="اكتب ردك بالإنجليزية" />
+                    </div>
+                    <button type="submit" class="conversation-send-btn" [disabled]="!conversationInput.trim() || conversationBusy" title="إرسال" aria-label="إرسال الرسالة">➤</button>
+                  </form>
+
+                  <div *ngIf="conversationComposerMode === 'voice'" class="conversation-voice-composer">
+                    <button *ngIf="!pendingConversationVoiceNote && !conversationRecording" type="button" class="conversation-record-primary" [class.is-recording]="conversationRecording" (click)="toggleConversationRecording()" [disabled]="conversationBusy">{{ conversationRecording ? '■ إيقاف التسجيل' : '🎙 ابدأ الريكورد' }}</button>
+                    <div *ngIf="pendingConversationVoiceNote && !conversationRecording" class="conversation-voice-transcript" dir="ltr">
+                      <label for="conversationVoiceTranscript">النص الذي التقطه المتصفح — عدّله فقط لو فهم كلمة غلط</label>
+                      <input id="conversationVoiceTranscript" name="conversationVoiceTranscript" [(ngModel)]="conversationInput" [disabled]="conversationBusy" autocomplete="off" placeholder="Type the spoken words if recognition missed them..." />
+                      <div dir="rtl">
+                        <button type="button" class="conversation-record-again" (click)="cancelPendingConversationVoiceNote(); toggleConversationRecording()" [disabled]="conversationBusy">إعادة التسجيل</button>
+                        <button type="button" class="conversation-send-voice" (click)="sendConversationMessage()" [disabled]="!conversationInput.trim() || conversationBusy">إرسال الريكورد</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="conversation-composer__meta">
+                    <span>{{ conversationLearningTurns }} / {{ conversationTargetTurns }} جولات مكتملة · تنتهي تلقائيًا عند 10</span>
+                    <b>{{ conversationProvider ? 'AI متصل · ' + conversationProvider : 'جاهز للاتصال' }}</b>
+                  </div>
+                </footer>
+
+                <div *ngIf="conversationComplete" class="conversation-complete-actions">
+                  <button type="button" class="conversation-finish-btn" (click)="finishConversation()">متابعة الدرس</button>
+                </div>
+              </ng-container>
+            </section>
+          </ng-container>
+
+          <ng-template #noConversation>
+            <section class="tool-empty"><span>💬</span><h2>لا يوجد سيناريو محادثة</h2><button type="button" class="tool-primary" (click)="skipEmptyConversation()">انتقل للمرحلة التالية</button></section>
+          </ng-template>
+        </ng-container>
+      </main>
+    </ng-container>
+  </ng-container>
+
+  <section *ngIf="!loading() && !lessonView" class="student-empty-state">
+    <span>🔎</span><h2>المرحلة غير متاحة</h2><a routerLink="/student/dashboard">ارجع لمسارك</a>
+  </section>
+
+  <app-stage-completion-card
+    *ngIf="lessonView as completedView"
+    [open]="stageCompletionPopupOpen"
+    [stageLabel]="stageCompletionFinishedLabel"
+    [nextStageLabel]="stageCompletionNextStage?.label || 'إنهاء الدرس'"
+    [score]="stageCompletionScore"
+    [scoreLabel]="stageCompletionScoreLabel"
+    [qualityLabel]="stageCompletionQualityLabel"
+    [note]="stageCompletionNote"
+    [metrics]="stageCompletionMetrics"
+    [insightSections]="stageCompletionInsightSections"
+    [completedStages]="stageCompletionFinishedNumber"
+    [totalStages]="completedView.stages.length"
+    [lessonComplete]="!stageCompletionNextStage"
+    (continue)="continueFromStageCompletion()"
+    (review)="stayOnCompletedStage()"
+  ></app-stage-completion-card>
+</section>

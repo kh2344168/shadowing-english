@@ -1,0 +1,140 @@
+<section dir="rtl" class="mx-auto w-full max-w-[1520px] text-[#0B1C30]" (click)="closeMenu()">
+  <header class="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center gap-2">
+        <h1 class="m-0 text-2xl font-bold tracking-tight">الدروس</h1>
+        <ng-container *ngIf="lessons$ | async as lessonCountSource">
+          <span class="rounded-full bg-[#DAE2FD] px-2.5 py-0.5 text-xs font-semibold text-[#5C647A]">{{ lessonCountSource.length }} درساً متوفراً</span>
+        </ng-container>
+      </div>
+      <p class="m-0 text-sm text-[#3E4947]">إدارة محتوى الدروس وتجهيزها للطلاب.</p>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2">
+      <input #importInput type="file" accept=".zip,.shadowlesson.zip,application/zip" class="hidden" (change)="importLesson($event)" />
+      <button type="button" (click)="$event.stopPropagation(); importInput.click()" [disabled]="isImporting || !!busyLessonId" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-[#3E4947] shadow-sm transition hover:bg-[#EFF4FF] disabled:opacity-50">
+        <span class="material-symbols-outlined text-[20px]">file_upload</span>
+        <span>{{ isImporting ? 'جاري الاستيراد...' : 'استيراد دفعة' }}</span>
+      </button>
+      <a [routerLink]="contentBasePath + '/lessons/builder'" class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#00685F] px-4 text-sm font-semibold text-white no-underline shadow-sm transition hover:bg-[#004E47]">
+        <span class="material-symbols-outlined text-[20px]">add</span>
+        <span>إضافة درس</span>
+      </a>
+    </div>
+  </header>
+
+  <ng-container *ngIf="lessons$ | async as lessons">
+    <p *ngIf="feedbackMessage" class="mb-4 rounded-xl border px-4 py-3 text-sm font-semibold" [ngClass]="feedbackError ? 'border-[#FFB4AB] bg-[#FFDAD6] text-[#93000A]' : 'border-[#A1F1E5] bg-[#E8FFF9] text-[#005049]'">{{ feedbackMessage }}</p>
+
+    <section class="mb-6 flex flex-col gap-4 rounded-xl bg-white p-4 shadow-sm xl:flex-row xl:items-center xl:justify-between">
+      <div class="flex flex-1 flex-col gap-4 lg:flex-row lg:items-center">
+        <div class="relative w-full lg:w-72">
+          <input [(ngModel)]="searchTerm" class="h-11 w-full rounded-xl bg-[#EFF4FF] py-2 pl-4 pr-10 text-sm outline-none transition focus:bg-[#E5EEFF]" placeholder="ابحث باسم الدرس..." type="text" />
+          <span class="material-symbols-outlined pointer-events-none absolute right-3 top-3 text-[20px] text-[#6E7977]">search</span>
+        </div>
+
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+          <button *ngFor="let level of levelFilters" type="button" (click)="$event.stopPropagation(); selectedLevel = level" class="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold transition"
+            [ngClass]="selectedLevel === level ? 'bg-[#00685F] text-white' : 'bg-[#EFF4FF] text-[#3E4947] hover:bg-[#E5EEFF]'">
+            {{ level === 'all' ? 'كل المستويات' : level }}
+          </button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2">
+        <select [(ngModel)]="selectedStatus" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
+          <option value="all">كل الحالات</option>
+          <option value="ready">جاهز</option>
+          <option value="processing">يحتاج معالجة</option>
+          <option value="draft">مسودة</option>
+          <option value="archived">مؤرشف</option>
+        </select>
+        <select [(ngModel)]="selectedSort" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
+          <option value="newest">الأحدث</option>
+          <option value="oldest">الأقدم</option>
+          <option value="name">الاسم</option>
+        </select>
+      </div>
+    </section>
+
+    <ng-container *ngIf="filteredLessons(lessons) as visibleLessons">
+      <div *ngIf="lessons.length === 0" class="rounded-2xl border border-dashed border-[#BEC9C6] bg-white px-5 py-14 text-center">
+        <div class="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[#EFF4FF] text-[#004E47]"><span class="material-symbols-outlined text-[28px]">play_lesson</span></div>
+        <h2 class="mb-1 mt-4 text-xl font-bold">المكتبة فارغة</h2>
+        <p class="m-0 text-sm text-[#6E7977]">ابدأ بإنشاء أول درس وحفظه داخل مكتبة الدروس.</p>
+      </div>
+
+      <div *ngIf="lessons.length > 0 && visibleLessons.length === 0" class="rounded-2xl bg-white px-5 py-12 text-center shadow-sm">
+        <span class="material-symbols-outlined text-[34px] text-[#6E7977]">search_off</span>
+        <h2 class="mb-1 mt-3 text-lg font-bold">لا توجد نتائج مطابقة</h2>
+        <p class="m-0 text-sm text-[#6E7977]">غيّر البحث أو الفلاتر لعرض دروس أخرى.</p>
+      </div>
+
+      <section *ngIf="visibleLessons.length > 0" class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <article *ngFor="let lesson of visibleLessons" class="group relative flex min-h-[310px] flex-col justify-between rounded-xl bg-white p-6 shadow-sm transition hover:shadow-md" [class.opacity-75]="lesson.status === 'archived'">
+          <div>
+            <div class="mb-4 flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="rounded-full px-2.5 py-0.5 text-xs font-bold" [ngClass]="lessonLevel(lesson) === '—' ? 'bg-[#EFF4FF] text-[#6E7977]' : 'bg-[#A1F1E5] text-[#004E47]'">{{ lessonLevel(lesson) }}</span>
+                <span class="flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold" [ngClass]="{
+                  'bg-[#EFF4FF] text-[#005137]': lessonDisplayStatus(lesson) === 'ready',
+                  'bg-[#DCE9FF] text-[#5C647A]': lessonDisplayStatus(lesson) === 'processing',
+                  'bg-[#E5EEFF] text-[#565E74]': lessonDisplayStatus(lesson) === 'draft',
+                  'bg-[#D3E4FE] text-[#6E7977]': lessonDisplayStatus(lesson) === 'archived'
+                }">
+                  <span class="h-1.5 w-1.5 rounded-full" [ngClass]="lessonDisplayStatus(lesson) === 'ready' ? 'bg-[#004F36]' : 'bg-[#6E7977]'" [class.animate-pulse]="lessonDisplayStatus(lesson) === 'processing'"></span>
+                  {{ statusLabel(lesson) }}
+                </span>
+              </div>
+
+              <div class="relative">
+                <button type="button" (click)="$event.stopPropagation(); toggleMenu(lesson.id)" class="grid h-8 w-8 place-items-center rounded-lg text-[#6E7977] transition hover:bg-[#EFF4FF] hover:text-[#0B1C30]" aria-label="خيارات الدرس">
+                  <span class="material-symbols-outlined text-[20px]">more_vert</span>
+                </button>
+                <div *ngIf="openMenuId === lesson.id" (click)="$event.stopPropagation()" class="absolute left-0 top-9 z-20 w-44 overflow-hidden rounded-xl bg-white py-1 shadow-xl">
+                  <a [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: lesson.id }" class="flex items-center gap-2 px-3.5 py-2 text-sm text-[#0B1C30] no-underline hover:bg-[#EFF4FF]"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">edit</span>تعديل</a>
+                  <button type="button" (click)="duplicateLesson(lesson); closeMenu()" [disabled]="!!busyLessonId || isImporting" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm hover:bg-[#EFF4FF] disabled:opacity-40"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">content_copy</span>نسخ</button>
+                  <button type="button" (click)="toggleArchive(lesson); closeMenu()" [disabled]="!!busyLessonId || isImporting" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm hover:bg-[#EFF4FF] disabled:opacity-40"><span class="material-symbols-outlined text-[17px] text-[#6E7977]">{{ lesson.status === 'archived' ? 'unarchive' : 'archive' }}</span>{{ lesson.status === 'archived' ? 'استعادة' : 'أرشفة' }}</button>
+                  <button type="button" (click)="deleteLesson(lesson); closeMenu()" [disabled]="!!busyLessonId || isImporting" class="flex w-full items-center gap-2 px-3.5 py-2 text-right text-sm text-[#BA1A1A] hover:bg-[#FFDAD6]/50 disabled:opacity-40"><span class="material-symbols-outlined text-[17px]">delete</span>حذف</button>
+                </div>
+              </div>
+            </div>
+
+            <h2 class="m-0 text-lg font-semibold transition group-hover:text-[#00685F]">{{ lesson.title }}</h2>
+            <p *ngIf="lesson.description" class="mt-2 line-clamp-2 min-h-12 text-sm leading-6 text-[#3E4947]">{{ lesson.description }}</p>
+            <p *ngIf="!lesson.description" class="mt-2 min-h-12 text-sm leading-6 text-[#6E7977]">{{ activityLabels(lesson) }}</p>
+          </div>
+
+          <div class="mt-6">
+            <div class="mb-4 flex items-center justify-between text-xs text-[#6E7977]">
+              <span class="flex items-center gap-1"><span class="material-symbols-outlined text-[17px] text-[#00685F]">graphic_eq</span>{{ lesson.segments.length }} مقطعاً</span>
+              <span>آخر تحديث {{ lesson.updatedAt | date:'shortDate' }}</span>
+            </div>
+
+            <a *ngIf="lessonDisplayStatus(lesson) === 'ready'" [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: lesson.id }" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#EFF4FF] text-sm font-semibold text-[#004E47] no-underline transition hover:bg-[#00685F] hover:text-white">
+              <span>فتح الدرس</span><span class="material-symbols-outlined text-[18px]">arrow_left</span>
+            </a>
+            <a *ngIf="lessonDisplayStatus(lesson) === 'processing'" [routerLink]="[contentBasePath + '/lessons', lesson.id, 'processing']" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#00685F] text-sm font-semibold text-white no-underline transition hover:bg-[#004E47]">
+              <span class="material-symbols-outlined text-[18px]">auto_awesome</span><span>معالجة المحتوى</span>
+            </a>
+            <a *ngIf="lessonDisplayStatus(lesson) === 'draft'" [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: lesson.id }" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#EFF4FF] text-sm font-semibold text-[#3E4947] no-underline transition hover:bg-[#E5EEFF]">
+              <span class="material-symbols-outlined text-[18px]">edit</span><span>متابعة التعديل</span>
+            </a>
+            <button *ngIf="lessonDisplayStatus(lesson) === 'archived'" type="button" (click)="toggleArchive(lesson)" [disabled]="!!busyLessonId || isImporting" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#EFF4FF] text-sm font-semibold text-[#3E4947] transition hover:bg-[#DCE9FF] disabled:opacity-40">
+              <span class="material-symbols-outlined text-[18px]">restore</span><span>استعادة الدرس</span>
+            </button>
+          </div>
+        </article>
+      </section>
+
+      <footer *ngIf="visibleLessons.length > 0" class="mt-6 flex flex-col items-center justify-between gap-3 rounded-xl bg-white px-5 py-4 shadow-sm sm:flex-row">
+        <div class="text-sm text-[#3E4947]">عرض <strong class="text-[#0B1C30]">{{ visibleLessons.length }}</strong> من أصل <strong class="text-[#0B1C30]">{{ lessons.length }}</strong> درساً</div>
+        <div class="flex items-center gap-1.5">
+          <button type="button" disabled class="grid h-9 w-9 place-items-center rounded-lg bg-[#EFF4FF] text-[#BEC9C6]"><span class="material-symbols-outlined text-[20px]">chevron_right</span></button>
+          <button type="button" class="grid h-9 w-9 place-items-center rounded-lg bg-[#00685F] text-sm font-bold text-white">١</button>
+          <button type="button" disabled class="grid h-9 w-9 place-items-center rounded-lg bg-[#EFF4FF] text-[#BEC9C6]"><span class="material-symbols-outlined text-[20px]">chevron_left</span></button>
+        </div>
+      </footer>
+    </ng-container>
+  </ng-container>
+</section>

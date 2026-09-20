@@ -1,0 +1,122 @@
+<section class="lesson-journey" dir="rtl" aria-labelledby="lesson-title">
+  <div *ngIf="loading()" class="student-loading" role="status">بنفتح الدرس...</div>
+
+  <ng-container *ngIf="!loading() && lessonView as view">
+    <header class="lesson-context">
+      <div class="lesson-context__inner">
+        <a [routerLink]="['/student/weeks', view.weekId]" class="lesson-context__back">
+          <span aria-hidden="true">→</span>
+          <strong>العودة إلى المسار</strong>
+        </a>
+        <div class="lesson-context__crumbs">
+          <b>A1</b><span>•</span><span>{{ view.weekName }}</span><span>•</span><strong>الدرس {{ view.lessonOrder + 1 }}</strong>
+        </div>
+        <div class="lesson-context__status">
+          <span>★ {{ view.completedStageCount }} / {{ view.stages.length }} مراحل مكتملة</span>
+          <b>{{ view.isCompleted ? 'مكتمل' : 'مسار الاستماع النشط' }}</b>
+        </div>
+      </div>
+    </header>
+
+    <main class="lesson-journey__content">
+      <section class="lesson-summary-card">
+        <span class="lesson-summary-card__glow" aria-hidden="true"></span>
+        <div class="lesson-summary-card__badges">
+          <span>{{ view.isCompleted ? 'الدرس مكتمل' : 'الدراسة الأساسية' }}</span>
+          <small>◷ {{ view.stages.length * 5 }} دقيقة تقريبًا</small>
+          <em>{{ view.weekName }}</em>
+        </div>
+
+        <h1 id="lesson-title">الدرس {{ view.lessonOrder + 1 }} — {{ view.lesson.title }}</h1>
+        <p>{{ view.lesson.description || 'تعلّم الحوار خطوة بخطوة وثبّت النطق والمعنى من خلال مراحل قصيرة ومتتابعة.' }}</p>
+
+        <div class="lesson-mastery">
+          <div class="lesson-mastery__stars" [attr.aria-label]="view.completedStageCount + ' من ' + view.stages.length + ' مراحل مكتملة'">
+            <span
+              *ngFor="let stage of view.stages; let stageIndex = index"
+              [class.is-earned]="stageIndex < view.completedStageCount"
+            >★</span>
+          </div>
+          <small>{{ view.isCompleted ? 'أحسنت، جميع مراحل الدرس مكتملة' : 'أكمل المرحلة الحالية لتحصل على علامة إتقان جديدة' }}</small>
+        </div>
+
+        <a class="lesson-summary-card__action" [routerLink]="actionPath" [queryParams]="{ slotId: view.curriculumSlotId }">
+          <span>{{ actionLabel }}</span><b aria-hidden="true">←</b>
+        </a>
+      </section>
+
+      <section class="lesson-stage-path" aria-labelledby="stages-heading">
+        <h2 id="stages-heading">مسار إتقان الدرس ({{ view.stages.length }} مراحل)</h2>
+        <ol>
+          <svg class="lesson-stage-path__wire" aria-hidden="true" fill="none" preserveAspectRatio="none" viewBox="0 0 360 920">
+            <path d="M180 20 C295 95 290 175 180 245 C70 315 70 395 180 465 C295 535 290 615 180 685 C70 755 85 850 180 900" />
+          </svg>
+
+          <li
+            *ngFor="let stage of view.stages; let stageIndex = index"
+            class="journey-stage"
+            [class.is-locked]="stage.status === 'locked'"
+            [class.is-current]="stage.status === 'current' || stage.status === 'available'"
+            [class.is-completed]="stage.status === 'completed'"
+            [class.is-opposite]="stageIndex % 2 === 1"
+          >
+            <div class="journey-stage__node-wrap">
+              <span *ngIf="stage.status === 'current' || stage.status === 'available'" class="journey-stage__cue">ابدأ هنا</span>
+              <a
+                *ngIf="stage.status !== 'locked'; else stageLocked"
+                class="journey-stage__node"
+                [routerLink]="stage.path"
+                [queryParams]="{ slotId: view.curriculumSlotId }"
+              >
+                <ng-container [ngSwitch]="stage.activityType">
+                  <span *ngSwitchCase="'shadowing'">🎧</span>
+                  <span *ngSwitchCase="'shadowing-review'">🎙</span>
+                  <span *ngSwitchCase="'vocabulary'">Aa</span>
+                  <span *ngSwitchCase="'listen-write'">⌨</span>
+                  <span *ngSwitchCase="'quiz'">✓</span>
+                  <span *ngSwitchCase="'ai-conversation'">💬</span>
+                  <span *ngSwitchDefault>{{ stageIndex + 1 }}</span>
+                </ng-container>
+              </a>
+              <ng-template #stageLocked>
+                <span class="journey-stage__node">
+                  <ng-container [ngSwitch]="stage.activityType">
+                    <span *ngSwitchCase="'vocabulary'">Aa</span>
+                    <span *ngSwitchCase="'listen-write'">⌨</span>
+                    <span *ngSwitchCase="'quiz'">✓</span>
+                    <span *ngSwitchCase="'ai-conversation'">💬</span>
+                    <span *ngSwitchDefault>🎙</span>
+                  </ng-container>
+                  <i>🔒</i>
+                </span>
+              </ng-template>
+              <small>المرحلة {{ stageIndex + 1 }}</small>
+            </div>
+
+            <article class="journey-stage__card">
+              <div>
+                <h3>{{ stage.label }}</h3>
+                <span *ngIf="stage.status === 'current' || stage.status === 'available'">نشط الآن</span>
+                <span *ngIf="stage.status === 'completed'">مكتمل ✓</span>
+                <span *ngIf="stage.status === 'locked'">🔒</span>
+              </div>
+              <p>{{ stage.description }}</p>
+              <small>◷ {{ stage.durationMinutes }} دقائق</small>
+            </article>
+          </li>
+        </ol>
+      </section>
+
+      <div class="lesson-support-grid">
+        <article><span aria-hidden="true">▤</span><div><h2>مفردات الدرس</h2><p>{{ view.lesson.vocabulary?.length || 0 }} كلمة وتعبير مع أمثلة من المحتوى.</p></div></article>
+        <article><span aria-hidden="true">🎙</span><div><h2>تقنية التظليل الصوتي</h2><p>استمع ثم ردّد مباشرة لتثبيت النطق الطبيعي.</p></div></article>
+      </div>
+
+      <footer class="lesson-note">ⓘ تُفتح كل مرحلة تلقائيًا بمجرد إتمام المرحلة السابقة.</footer>
+    </main>
+  </ng-container>
+
+  <section *ngIf="!loading() && !lessonView" class="student-empty-state">
+    <span>🔎</span><h2>الدرس غير متاح</h2><a routerLink="/student/dashboard">ارجع لمسارك</a>
+  </section>
+</section>

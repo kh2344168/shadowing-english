@@ -1,0 +1,31 @@
+<section dir="rtl" class="mx-auto w-full max-w-[1180px] pb-8">
+  <div *ngIf="loading()" class="rounded-xl bg-white p-12 text-center text-sm font-semibold text-[#6E7977] shadow-sm">جاري فتح الدرس...</div>
+
+  <ng-container *ngIf="!loading() && lesson as currentLesson">
+    <header class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div><div class="mb-2 flex items-center gap-2 text-xs text-[#6E7977]"><a [routerLink]="contentBasePath + '/lessons'" class="text-[#6E7977] no-underline hover:text-[#004E47]">الدروس</a><span class="material-symbols-outlined text-[14px]">chevron_left</span><span class="font-semibold text-[#004E47]">معالجة محتوى الدرس</span></div><h1 class="m-0 text-2xl font-bold">معالجة: {{ currentLesson.title }}</h1><p class="mb-0 mt-2 max-w-2xl text-sm leading-6 text-[#3E4947]">نجهّز الكلمات والأنشطة والاختبار والمحادثة، ثم تحفظ النتيجة في الـBackend قبل المراجعة.</p></div>
+      <span class="w-fit rounded-full px-3 py-1 text-xs font-semibold" [ngClass]="ready() ? 'bg-[#DDF7EC] text-[#005137]' : processing() ? 'bg-[#FFF0D8] text-[#825100]' : 'bg-[#EFF4FF] text-[#6E7977]'">{{ ready() ? 'اكتملت المعالجة' : processing() ? 'المعالجة جارية' : 'جاهز للبدء' }}</span>
+    </header>
+
+    <section class="mb-6 rounded-xl bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><span class="text-xs font-semibold text-[#6E7977]">الدرس الحالي</span><strong class="mt-1 block text-lg">{{ currentLesson.title }}</strong><span class="mt-1 block text-xs text-[#6E7977]">{{ currentLesson.segments.length }} مقطع · {{ currentLesson.requiredRepetitions }} تكرارات مطلوبة</span></div><div class="grid grid-cols-3 gap-2"><div class="rounded-lg bg-[#EFF4FF] px-4 py-3 text-center"><strong class="block text-lg text-[#004E47]">{{ vocabularyCount }}</strong><span class="text-[10px] text-[#6E7977]">كلمات وChunks</span></div><div class="rounded-lg bg-[#EFF4FF] px-4 py-3 text-center"><strong class="block text-lg text-[#004E47]">{{ activityCount }}</strong><span class="text-[10px] text-[#6E7977]">أنشطة</span></div><div class="rounded-lg bg-[#EFF4FF] px-4 py-3 text-center"><strong class="block text-lg text-[#004E47]">{{ generatedImageCount }}</strong><span class="text-[10px] text-[#6E7977]">صور</span></div></div></div>
+    </section>
+
+    <section class="rounded-xl bg-white p-6 shadow-sm">
+      <div class="mb-6 rounded-xl bg-[#EFFBF8] p-5"><div class="flex items-center justify-between gap-3"><div><strong class="block text-base text-[#005137]">{{ progress().title }}</strong><p class="mb-0 mt-1 text-xs leading-5 text-[#3E4947]">{{ progress().detail }}</p></div><b class="text-lg text-[#005137]">{{ progress().percent }}%</b></div><div class="mt-4 h-2.5 overflow-hidden rounded-full bg-white"><span class="block h-full rounded-full bg-[#00685F] transition-all duration-300" [style.width.%]="progress().percent"></span></div></div>
+
+      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <article *ngFor="let step of steps; let index = index" class="flex items-center gap-3 rounded-xl border p-4" [ngClass]="isStepComplete(step) ? 'border-[#A1F1E5] bg-[#EFFBF8]' : 'border-[#E5EEFF] bg-[#F8F9FF]'"><span class="grid h-9 w-9 shrink-0 place-items-center rounded-full text-xs font-bold" [ngClass]="isStepComplete(step) ? 'bg-[#00685F] text-white' : 'bg-[#E5EEFF] text-[#6E7977]'">{{ isStepComplete(step) ? '✓' : index + 1 }}</span><div><strong class="block text-sm">{{ step.title }}</strong><small class="mt-1 block text-[10px] text-[#6E7977]">{{ isStepComplete(step) ? 'جاهزة' : 'في الانتظار' }}</small></div></article>
+      </div>
+
+      <div *ngIf="ready()" class="mt-6 grid gap-3 md:grid-cols-3"><article class="rounded-xl bg-[#EFF4FF] p-4"><span class="material-symbols-outlined text-[20px] text-[#00685F]">dictionary</span><strong class="mt-2 block text-sm">الكلمات والتعبيرات</strong><span class="mt-1 block text-xs text-[#6E7977]">{{ vocabularyCount }} عنصر جاهز للمراجعة.</span></article><article class="rounded-xl bg-[#EFF4FF] p-4"><span class="material-symbols-outlined text-[20px] text-[#00685F]">quiz</span><strong class="mt-2 block text-sm">الأنشطة والاختبار</strong><span class="mt-1 block text-xs text-[#6E7977]">{{ activityCount }} مراحل تدريبية محفوظة في النتيجة.</span></article><article class="rounded-xl bg-[#EFF4FF] p-4"><span class="material-symbols-outlined text-[20px] text-[#00685F]">forum</span><strong class="mt-2 block text-sm">المحادثة</strong><span class="mt-1 block text-xs text-[#6E7977]">{{ hasConversation ? 'سيناريو المحادثة موجود ضمن الدرس.' : 'لا توجد محادثة مفعلة حاليًا.' }}</span></article></div>
+
+      <p *ngIf="error" class="mt-5 rounded-xl bg-[#FFDAD6]/50 p-4 text-sm font-semibold text-[#93000A]">{{ error }}</p>
+      <p *ngIf="imageWarning" class="mt-5 rounded-xl bg-[#FFF0D8] p-4 text-sm font-semibold leading-6 text-[#825100]">{{ imageWarning }}</p>
+
+      <div class="mt-6 flex flex-col gap-3 border-t border-[#EFF4FF] pt-5 sm:flex-row sm:items-center sm:justify-between"><div><strong class="block text-sm">المعالجة لا تنشر الدرس للطلاب</strong><span class="mt-1 block text-xs leading-5 text-[#6E7977]">بعد الحفظ تنتقل للمراجعة، والنشر الفعلي يتم لاحقًا من خلال المجموعة.</span></div><div class="flex flex-wrap gap-2"><button *ngIf="error" type="button" (click)="retry()" class="h-11 rounded-xl bg-[#EFF4FF] px-4 text-sm font-semibold text-[#004E47]">إعادة المحاولة</button><button *ngIf="ready() && !savedToBackend()" type="button" (click)="completeProcessing()" [disabled]="savingResult()" class="h-11 rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white disabled:opacity-50">{{ savingResult() ? 'جاري الحفظ...' : 'تمت المعالجة — احفظ النتيجة' }}</button><a *ngIf="ready() && savedToBackend()" [routerLink]="[contentBasePath + '/lessons', currentLesson.id, 'content-review']" class="inline-flex h-11 items-center rounded-xl bg-[#00685F] px-5 text-sm font-semibold text-white no-underline">مراجعة المحتوى</a></div></div>
+    </section>
+  </ng-container>
+
+  <section *ngIf="!loading() && !lesson" class="rounded-xl bg-white p-12 text-center shadow-sm"><h1 class="text-lg font-bold">الدرس غير موجود</h1><a [routerLink]="contentBasePath + '/lessons'" class="mt-4 inline-flex text-sm font-semibold text-[#004E47]">العودة لمكتبة الدروس</a></section>
+</section>

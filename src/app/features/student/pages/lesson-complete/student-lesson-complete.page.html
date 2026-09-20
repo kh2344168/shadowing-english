@@ -1,0 +1,37 @@
+<section class="student-page student-page--celebration" dir="rtl" aria-labelledby="complete-title">
+  <div *ngIf="loading()" class="student-loading" role="status">بنحسب تقدمك...</div>
+
+  <main *ngIf="!loading() && lessonView as view" class="student-complete-card">
+    <div class="student-confetti" aria-hidden="true"><i>●</i><i>◆</i><i>▲</i><i>●</i><i>◆</i><i>▲</i></div>
+    <span class="student-complete-card__badge" aria-hidden="true">✓</span>
+    <span class="student-kicker">درس جديد اتضاف لإنجازاتك</span>
+    <h1 id="complete-title">عاش يا بطل! خلصت الدرس</h1>
+    <p>{{ view.lesson.title }}</p>
+
+    <div class="student-complete-stats">
+      <div><strong>{{ view.stages.length }}/{{ view.stages.length }}</strong><span>مراحل</span></div>
+      <div><strong>{{ view.progress?.completedRepetitions || view.lesson.requiredRepetitions }}</strong><span>تكرارات</span></div>
+      <div><strong>+40</strong><span>نقطة</span></div>
+    </div>
+
+    <section class="student-tomorrow-note">
+      <span aria-hidden="true">↻</span>
+      <div><strong>هنفكّرك تراجعه بكرة</strong><p>مراجعة شادوينج قصيرة علشان النطق يثبت، وبعدها على أيام 3 و7 و14.</p></div>
+    </section>
+
+    <div class="student-complete-actions">
+      <a
+        *ngIf="nextLesson && !nextLesson.isLocked"
+        class="student-primary-action student-primary-action--full"
+        [routerLink]="['/student/lessons', nextLesson.lesson.id]"
+        [queryParams]="{ slotId: nextLesson.curriculumSlotId }"
+      >ابدأ الدرس التالي</a>
+      <a
+        class="student-secondary-action"
+        routerLink="/student/review"
+        [queryParams]="{ preview: 1, slotId: view.curriculumSlotId }"
+      >عاين مراجعة بكرة</a>
+      <a class="student-text-action" routerLink="/student/dashboard">ارجع لمسارك</a>
+    </div>
+  </main>
+</section>

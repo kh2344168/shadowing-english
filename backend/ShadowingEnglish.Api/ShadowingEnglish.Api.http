@@ -1,0 +1,6 @@
+@ShadowingEnglish.Api_HostAddress = http://localhost:5017
+
+GET {{ShadowingEnglish.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

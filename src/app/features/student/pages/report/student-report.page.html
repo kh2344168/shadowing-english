@@ -1,0 +1,87 @@
+<section class="report-page" dir="rtl" aria-labelledby="student-report-title">
+  <header class="report-header">
+    <div>
+      <span class="report-kicker">ملف تعلمك</span>
+      <h1 id="student-report-title">تقرير الطالب الشامل</h1>
+      <p>تقدمك، اختباراتك، تسجيلاتك، محادثاتك المحفوظة، وبنك الكلمات والجمل في تقرير واحد.</p>
+    </div>
+    <div class="report-actions">
+      <button type="button" class="report-btn report-btn--soft" (click)="copyAiContext()">
+        <span class="material-symbols-outlined">smart_toy</span>{{ copied ? 'تم نسخ سياق AI ✓' : 'نسخ سياق AI' }}
+      </button>
+      <button type="button" class="report-btn report-btn--primary" (click)="downloadPdf()" [disabled]="exporting()">
+        <span class="material-symbols-outlined">download</span>{{ exporting() ? 'بنجهز الـPDF...' : 'تنزيل PDF' }}
+      </button>
+    </div>
+  </header>
+
+  <div *ngIf="loading()" class="report-loading">بنكوّن التقرير من تقدمك الحقيقي...</div>
+
+  <ng-container *ngIf="!loading() && report as reportView">
+    <section class="report-profile">
+      <div class="report-avatar">{{ reportView.studentName.charAt(0) }}</div>
+      <div><span>الطالب</span><h2>{{ reportView.studentName }}</h2><p>{{ reportView.studentEmail }}</p></div>
+      <dl>
+        <div><dt>المجموعة</dt><dd>{{ reportView.groupName || '—' }}</dd></div>
+        <div><dt>المنهج</dt><dd>{{ reportView.courseName }}</dd></div>
+        <div><dt>آخر نشاط</dt><dd>{{ formatDate(reportView.lastActivityAt) }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="report-summary-grid">
+      <article class="report-progress-card">
+        <div class="report-ring" [style.--progress]="reportView.progressPercent + '%'">{{ reportView.progressPercent }}%</div>
+        <div><small>التقدم العام</small><strong>{{ reportView.completedLessons }} / {{ reportView.totalLessons }}</strong><span>دروس مكتملة</span></div>
+      </article>
+      <article><span class="material-symbols-outlined">mic</span><strong>{{ reportView.recordingCount }}</strong><small>تسجيل محفوظ</small></article>
+      <article><span class="material-symbols-outlined">event_repeat</span><strong>{{ reportView.dueReviews }}</strong><small>مراجعات مستحقة</small></article>
+      <article><span class="material-symbols-outlined">quiz</span><strong>{{ reportView.averageQuizScore === null ? '—' : reportView.averageQuizScore + '%' }}</strong><small>متوسط الاختبارات</small></article>
+      <article><span class="material-symbols-outlined">forum</span><strong>{{ reportView.conversationSessions }}</strong><small>محادثات محفوظة</small></article>
+    </section>
+
+    <div class="report-two-columns">
+      <section class="report-panel">
+        <div class="report-panel__heading"><div><span class="report-kicker">المعرفة المتراكمة</span><h2>بنكك الحالي</h2></div><a routerLink="/student/knowledge-bank">فتح البنك</a></div>
+        <div class="report-bank-numbers">
+          <div><strong>{{ reportView.knowledge.words.length }}</strong><span>كلمة</span></div>
+          <div><strong>{{ reportView.knowledge.chunks.length }}</strong><span>عبارة</span></div>
+          <div><strong>{{ reportView.knowledge.sentences.length }}</strong><span>جملة</span></div>
+        </div>
+        <p class="report-panel__note">يتم احتساب العناصر فقط من مراحل تدريب أكملتها، وليس من دروس مستقبلية.</p>
+      </section>
+
+      <section class="report-panel">
+        <div class="report-panel__heading"><div><span class="report-kicker">المحادثة</span><h2>أداء التدريب الكلامي</h2></div></div>
+        <div class="report-conversation-stats">
+          <div><strong>{{ reportView.conversationTurns }}</strong><span>إجابة مقبولة</span></div>
+          <div><strong>{{ reportView.conversationGoodAnswers }}</strong><span>إجابة جيدة</span></div>
+          <div><strong>{{ reportView.conversationCorrections }}</strong><span>تصحيح مهم</span></div>
+        </div>
+        <p *ngIf="!reportView.conversationSessions" class="report-panel__note">سيبدأ تسجيل إحصائيات المحادثة في التقرير عند إكمال محادثات جديدة.</p>
+      </section>
+    </div>
+
+    <section class="report-panel report-lessons-panel">
+      <div class="report-panel__heading"><div><span class="report-kicker">تفاصيل الدراسة</span><h2>الدروس التي بدأت فيها</h2></div><span>{{ reportView.lessons.length }} درس</span></div>
+      <div *ngIf="reportView.lessons.length; else noLessonProgress" class="report-lessons">
+        <article *ngFor="let lesson of reportView.lessons">
+          <div class="report-lesson-title"><strong>{{ lesson.title }}</strong><span>{{ lesson.weekName }}</span></div>
+          <div class="report-track"><i [style.width.%]="lesson.progressPercent"></i></div>
+          <div class="report-lesson-meta">
+            <span>{{ lesson.progressPercent }}%</span>
+            <span>مراحل {{ lesson.completedStages }}/{{ lesson.totalStages }}</span>
+            <span>🎙️ {{ lesson.recordingCount }}</span>
+            <span *ngIf="lesson.quizScore !== undefined">اختبار {{ lesson.quizScore }}%</span>
+            <span>{{ lesson.completed ? 'مكتمل ✓' : 'قيد الدراسة' }}</span>
+          </div>
+        </article>
+      </div>
+      <ng-template #noLessonProgress><p class="report-empty">لا يوجد تقدم دراسي محفوظ بعد.</p></ng-template>
+    </section>
+
+    <section class="report-ai-tip">
+      <span class="material-symbols-outlined">tips_and_updates</span>
+      <div><strong>استخدم التقرير مع أي ذكاء اصطناعي</strong><p>نزّل الـPDF وارفعه في المحادثة، أو استخدم زر «نسخ سياق AI». التقرير يوضح اللغة التي سبق أن تدربت عليها حتى لا يبدأ معك من الصفر.</p></div>
+    </section>
+  </ng-container>
+</section>
