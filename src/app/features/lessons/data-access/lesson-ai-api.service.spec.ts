@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { API_BASE_URL } from '../../../core/api/api.config';
 import { LessonAiApiService, LessonAiRequestError } from './lesson-ai-api.service';
 
 describe('LessonAiApiService backend-only AI', () => {
@@ -28,7 +29,7 @@ describe('LessonAiApiService backend-only AI', () => {
       status: 503,
     } satisfies Partial<LessonAiRequestError>);
 
-    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/lesson-ai/structured');
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(`${API_BASE_URL}/lesson-ai/process`);
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/__ai/'))).toBe(false);
   });
 

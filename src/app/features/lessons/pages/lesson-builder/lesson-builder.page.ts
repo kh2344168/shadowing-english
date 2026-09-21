@@ -3,6 +3,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../../../core/auth/services/auth.service';
+import { AppDiagnosticsService } from '../../../../core/diagnostics/app-diagnostics.service';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
@@ -235,6 +236,7 @@ export class LessonBuilderPage implements OnInit, AfterViewInit, OnDestroy {
     private router: Router,
     private lessonRepository: LessonRepository,
     private localWhisperAlignment: LocalWhisperAlignmentService,
+    private diagnostics: AppDiagnosticsService,
     public auth: AuthService,
   ) {}
 
@@ -1070,18 +1072,34 @@ export class LessonBuilderPage implements OnInit, AfterViewInit, OnDestroy {
   }
 
   async finishLessonAndSave(): Promise<void> {
+    const elapsed = this.diagnostics.start('LessonBuilder', 'SHADOWING_SAVE', {
+      lessonId: this.editingLessonId || 'new',
+      segmentCount: this.segments.length,
+      hasMedia: Boolean(this.currentMediaBlob),
+    });
+
     const saved = await this.saveLesson();
-    if (
-      saved &&
-      this.editingLessonId &&
-      (this.auth.isAdmin() || this.auth.isTeacher())
-    ) {
-      await this.router.navigate([
-        `${this.contentBasePath}/lessons`,
-        this.editingLessonId,
-        'processing',
-      ]);
+    this.diagnostics.check('LessonBuilder', 'SHADOWING_SAVE_RESULT', saved, {
+      lessonId: this.editingLessonId || 'unknown',
+      segmentCount: this.segments.length,
+    });
+
+    if (!saved || !this.editingLessonId) {
+      this.diagnostics.error(
+        'LessonBuilder',
+        'SHADOWING_SAVE:error',
+        new Error('Shadowing save did not complete.'),
+        { durationMs: elapsed(), segmentCount: this.segments.length },
+      );
+      return;
     }
+
+    this.diagnostics.success('LessonBuilder', 'SHADOWING_SAVE', elapsed(), {
+      lessonId: this.editingLessonId,
+      nextStage: 'lesson-library',
+    });
+
+    await this.router.navigate([`${this.contentBasePath}/lessons`]);
   }
 
   async discardBuilderDraft(): Promise<void> {
@@ -1110,46 +1128,29 @@ export class LessonBuilderPage implements OnInit, AfterViewInit, OnDestroy {
         learningObjective: this.lessonLearningObjective.trim(),
         teacherNotes: this.lessonTeacherNotes.trim(),
       },
-      status: 'draft',
+      status: existing?.status || 'draft',
       weekName: '',
       dayName: '',
       requiredRepetitions: Math.max(Number(this.requiredRepetitions) || 10, 1),
       mediaFileName: this.currentMediaFileName || 'lesson-file',
       mediaType: this.currentMediaType || this.currentMediaBlob.type || 'application/octet-stream',
       segments: this.segments.map((segment) => ({ ...segment })),
-      vocabulary: this.vocabulary
-        .filter((item) => item.term.trim())
-        .map((item) => ({
-          term: item.term.trim(),
-          id: item.id,
-          kind: item.kind || (item.term.trim().includes(' ') ? 'chunk' : 'word'),
-          translation: item.translation.trim(),
-          example: item.example.trim() || item.term.trim(),
-          explanation: item.explanation?.trim() || '',
-          imagePrompt: item.imagePrompt?.trim() || '',
-          extraExample: item.extraExample?.trim() || '',
-          usageNote: item.usageNote?.trim() || '',
-          imageAlt: item.imageAlt?.trim() || '',
-          imageProvider: item.imageProvider,
-          aiConfidence: Math.min(1, Math.max(0, Number(item.aiConfidence) || 0)),
-          imageUrl: item.imageUrl?.trim() || '',
-          imageApproved: Boolean(item.imageUrl?.trim() && item.imageApproved),
-          includeForStudent: item.includeForStudent !== false,
-          repeatForReview: Boolean(item.repeatForReview),
-          testLater: Boolean(item.testLater),
-        })),
-      activities: this.activities.map((activity, order) => ({
-        ...activity,
-        order,
-        enabled: true,
-        aiGenerated: false,
-        reviewStatus: 'pending',
-        title: activity.title.trim() || this.activityTypeLabel(activity.type),
-        questionCount:
-          activity.type === 'ai-conversation'
-            ? Math.max(6, Number(activity.questionCount) || 6)
-            : undefined,
-      })),
+      // The builder owns only the shadowing stage. Existing AI-generated content
+      // is preserved when editing a lesson and is never regenerated from this page.
+      vocabulary: existing?.vocabulary?.map((item) => ({ ...item })) || [],
+      activities: existing?.activities?.length
+        ? existing.activities.map((activity, order) => ({ ...activity, order }))
+        : [
+            {
+              id: 'shadowing',
+              type: 'shadowing',
+              title: 'Shadowing',
+              order: 0,
+              enabled: true,
+              reviewStatus: 'pending',
+              aiGenerated: false,
+            },
+          ],
       scriptLines: [...this.scriptLines],
       createdAt: existing?.createdAt || now,
       updatedAt: now,
@@ -1186,7 +1187,7 @@ export class LessonBuilderPage implements OnInit, AfterViewInit, OnDestroy {
     this.saveStore();
     await this.clearBuilderDraft(false);
     this.lessonSavedMessage =
-      'تم حفظ الدرس داخل مكتبة الدروس. الخطوة التالية: أضفه إلى المنهج ثم انشره للمجموعة.';
+      'تم حفظ مرحلة الشادوينج بنجاح. يمكنك بدء معالجة الكلمات والصور من مكتبة الدروس.';
     this.view = 'lesson-builder';
     return true;
   }

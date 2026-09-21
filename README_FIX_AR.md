@@ -1,34 +1,72 @@
-# Fix: Backend Build CS0428
+# إصلاح AI المحلي + نقل المعالجة إلى Lesson Builder
 
-الخطأ كان في `backend/ShadowingEnglish.Api/Program.cs` السطر الخاص بسياسة Cookie SecurePolicy.
+## التشخيص
+النسخة المرفوعة تحتوي على دليل واضح على سبب HTTP 405:
 
-قبل:
-```csharp
-options.Cookie.SecurePolicy = builder.Environment.IsDevelopment
-```
+- الـFrontend كان يرسل معالجة الدرس إلى `POST /api/lesson-ai/structured`.
+- الـBackend source الحالي يحتوي هذا المسار.
+- لكن الـbinary الأقدم الموجود داخل `artifacts/backend-build-check/ShadowingEnglish.Api.dll` يحتوي `process` ولا يحتوي `structured`.
+- عند تشغيل binary قديم، الطلب إلى `/structured` لا يجد POST مطابقًا، ومع وجود SPA fallback يمكن أن يظهر كـ HTTP 405.
 
-بعد:
-```csharp
-options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
-```
+## ما تم تغييره
 
-السبب: `IsDevelopment` هي method وليست property، وعدم استدعائها بالأقواس كان يمنع الـBackend بالكامل من الـBuild ويؤدي لاحقًا إلى `ECONNREFUSED` من Angular proxy.
+1. **معالجة الدرس لا تستخدم `/structured` بعد الآن**.
+   أصبحت تستخدم endpoint المخصص الموجود أصلًا:
+   `POST /api/lesson-ai/process`
 
-## بعد تركيب التعديل
-شغّل:
+   هذا أفضل لأن الـprompt والـschema يظلان داخل الـBackend، وهو متوافق أيضًا مع الـbackend المحلي الأقدم الموجود في المشروع.
 
-```bat
-scripts\start-api-and-diagnose.cmd
-```
+2. **منع تشغيل Backend قديم على port 5017**.
+   `scripts/run-api.ps1` أصبح:
+   - يكتشف نسخة ShadowingEnglish API قديمة على 5017.
+   - يوقفها فقط إذا تأكد أنها تخص المشروع.
+   - يعمل build جديد.
+   - يشغل النسخة الجديدة.
+   - لا يوقف أي process غريب يستخدم نفس المنفذ.
 
-أو:
+3. **لا Proxy**.
+   - `proxy.conf.json` أصبح `{}`.
+   - الـFrontend المحلي يستمر في الاتصال مباشرة بـ `http://localhost:5017/api`.
+   - `scripts/check-ai-backend-only.ps1` يفشل لو رجع proxy config فعلي مرة أخرى.
 
-```bat
-scripts\run-api.cmd
-```
+4. **المعالجة أصبحت داخل `/admin/lessons/builder`**.
+   بعد حفظ الدرس كـ Admin:
+   - تبدأ المرحلة الأولى تلقائيًا: تحليل نص الدرس بالذكاء الاصطناعي.
+   - تظهر نتيجة الفهم داخل نفس الصفحة: الموضوع/السيناريو/الأهداف + عدد الكلمات والاختبار.
+   - بعدها يظهر زر: **ابدأ معالجة الكلمات وباقي المراحل**.
+   - المرحلة الثانية تجهز الكلمات والصور + Listen & Write + Quiz + Conversation داخل نفس الصفحة.
+   - الصور تعمل حتى 3 requests بالتوازي.
+   - النتيجة النهائية تحفظ تلقائيًا في الـBackend.
+   - بعد النجاح يظهر زر **فتح مراجعة المحتوى**.
 
-ثم افتح:
+5. **Logging آمن**.
+   تمت إضافة START / CHECK / SUCCESS / ERROR لمعالجة الدرس في الـBackend مع:
+   - LessonId
+   - SegmentCount
+   - Provider
+   - counts
+   - correlationId
+   - durationMs
 
-```text
-http://localhost:5017/api/health
-```
+   بدون API keys أو passwords أو tokens أو audio bytes.
+
+## الملفات المعدلة
+- `src/app/features/lessons/data-access/lesson-ai-api.service.ts`
+- `src/app/features/lessons/data-access/lesson-ai-api.service.spec.ts`
+- `src/app/features/lessons/pages/lesson-builder/lesson-builder.page.ts`
+- `src/app/features/lessons/pages/lesson-builder/lesson-builder.page.html`
+- `backend/ShadowingEnglish.Api/Services/LessonAiService.cs`
+- `scripts/run-api.ps1`
+- `scripts/check-ai-backend-only.ps1`
+- `proxy.conf.json`
+
+## التشغيل المحلي بعد تطبيق الباتش
+1. أغلق نافذة الـAPI القديمة إن كانت مفتوحة، أو فقط شغّل `scripts\\run-api.cmd`؛ السكربت أصبح يتعامل مع نسخة المشروع القديمة على 5017 تلقائيًا.
+2. شغّل `scripts\\run-frontend.cmd`.
+3. افتح:
+   `http://localhost:4200/admin/lessons/builder`
+4. أنشئ/عدّل درسًا واضغط **حفظ وتحليل الدرس**.
+5. بعد نجاح تحليل النص اضغط **ابدأ معالجة الكلمات وباقي المراحل**.
+
+## ملاحظة التحقق
+تم التحقق من source والمسارات والـcompiled artifacts الموجودة داخل النسخة المرفوعة. بيئة الفحص هنا لا تحتوي .NET SDK ولا dependencies الخاصة بالمشروع، لذلك يجب تشغيل `dotnet build` و`npm run build` على جهاز المشروع بعد تطبيق الملفات.

@@ -49,8 +49,38 @@ if ($null -eq $sqlService) {
 $existing = Get-NetTCPConnection -LocalPort 5017 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($null -ne $existing) {
   $processName = 'unknown'
+  $commandLine = ''
   try { $processName = (Get-Process -Id $existing.OwningProcess -ErrorAction Stop).ProcessName } catch {}
-  Fail 'PORT_5017_BUSY' "Port 5017 is already listening. PID=$($existing.OwningProcess) Process=$processName. Stop the old process or use the already-running API." 14
+  try {
+    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $($existing.OwningProcess)" -ErrorAction Stop
+    $commandLine = [string]$processInfo.CommandLine
+  } catch {}
+
+  $looksLikeProjectApi = (
+    $processName -like 'ShadowingEnglish.Api*' -or
+    $commandLine -like '*ShadowingEnglish.Api*'
+  )
+
+  if ($looksLikeProjectApi) {
+    Step 'CHECK' "Found an older local ShadowingEnglish API on port 5017. PID=$($existing.OwningProcess). Stopping it before rebuild..."
+    try {
+      Stop-Process -Id $existing.OwningProcess -Force -ErrorAction Stop
+      $deadline = (Get-Date).AddSeconds(10)
+      do {
+        Start-Sleep -Milliseconds 250
+        $stillListening = Get-NetTCPConnection -LocalPort 5017 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+      } while ($null -ne $stillListening -and (Get-Date) -lt $deadline)
+
+      if ($null -ne $stillListening) {
+        Fail 'OLD_API_STOP_TIMEOUT' "The previous ShadowingEnglish API did not release port 5017 in time. PID=$($existing.OwningProcess)." 14
+      }
+      Step 'SUCCESS' 'Old local API stopped. A fresh build will be started.'
+    } catch {
+      Fail 'OLD_API_STOP_FAILED' "Could not stop the previous ShadowingEnglish API. PID=$($existing.OwningProcess). $($_.Exception.Message)" 14
+    }
+  } else {
+    Fail 'PORT_5017_BUSY' "Port 5017 is already listening. PID=$($existing.OwningProcess) Process=$processName. This does not look like the ShadowingEnglish API, so it was not stopped automatically." 14
+  }
 }
 
 Step 'BUILD' 'Building backend before startup...'

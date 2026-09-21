@@ -336,63 +336,98 @@ public sealed class LessonAiService(
         LessonContentGenerationRequestDto request,
         CancellationToken cancellationToken)
     {
-        var userContent = JsonSerializer.Serialize(new
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var correlationId = httpContextAccessor.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N");
+        logger.LogInformation(
+            "[LessonAI][PROCESS][START] LessonId={LessonId} SegmentCount={SegmentCount} CorrelationId={CorrelationId}",
+            request.LessonId,
+            request.Segments?.Count ?? 0,
+            correlationId);
+
+        try
         {
-            lessonTitle = request.LessonTitle,
-            teacherProfile = request.ContentProfile,
-            sourceSentences = request.Segments,
-        }, JsonOptions);
+            var userContent = JsonSerializer.Serialize(new
+            {
+                lessonTitle = request.LessonTitle,
+                teacherProfile = request.ContentProfile,
+                sourceSentences = request.Segments,
+            }, JsonOptions);
 
-        var (structuredJson, provider) = await GenerateStructuredTextWithFallbackAsync(
-            "content",
-            BuildLessonProcessingInstructions(),
-            userContent,
-            "lesson_content_review_draft",
-            LessonContentSchema,
-            cancellationToken);
+            logger.LogInformation(
+                "[LessonAI][PROCESS][CHECK] Request prepared. LessonId={LessonId} CorrelationId={CorrelationId}",
+                request.LessonId,
+                correlationId);
 
-        var payload = JsonSerializer.Deserialize<OpenAiLessonContentPayload>(
-            structuredJson,
-            JsonOptions) ?? throw new InvalidOperationException("AI provider returned an empty lesson draft.");
+            var (structuredJson, provider) = await GenerateStructuredTextWithFallbackAsync(
+                "content",
+                BuildLessonProcessingInstructions(),
+                userContent,
+                "lesson_content_review_draft",
+                LessonContentSchema,
+                cancellationToken);
 
-        var vocabulary = payload.Vocabulary
-            .Where(item => !string.IsNullOrWhiteSpace(item.Term))
-            .Select((item, index) => new LessonVocabularyItemDto(
-                $"ai-vocabulary-{index + 1}",
-                item.Kind == "chunk" ? "chunk" : "word",
-                item.Term.Trim(),
-                item.Translation.Trim(),
-                item.Example.Trim(),
-                item.Explanation.Trim(),
-                item.ImagePrompt.Trim(),
-                item.ExtraExample.Trim(),
-                item.UsageNote.Trim(),
-                item.ImageAlt.Trim(),
-                "placeholder",
-                Math.Clamp(item.AiConfidence, 0, 1),
-                null,
-                false,
-                true,
-                false,
-                false))
-            .ToArray();
+            var payload = JsonSerializer.Deserialize<OpenAiLessonContentPayload>(
+                structuredJson,
+                JsonOptions) ?? throw new InvalidOperationException("AI provider returned an empty lesson draft.");
 
-        var quizQuestions = payload.QuizQuestions
-            .Select((question, index) => new LessonQuizQuestionDto(
-                string.IsNullOrWhiteSpace(question.Id) ? $"quiz-ai-{index + 1}" : question.Id,
-                question.Type,
-                question.Prompt.Trim(),
-                question.Options,
-                question.CorrectAnswer.Trim(),
-                question.Feedback.Trim(),
-                question.Enabled))
-            .ToArray();
+            var vocabulary = payload.Vocabulary
+                .Where(item => !string.IsNullOrWhiteSpace(item.Term))
+                .Select((item, index) => new LessonVocabularyItemDto(
+                    $"ai-vocabulary-{index + 1}",
+                    item.Kind == "chunk" ? "chunk" : "word",
+                    item.Term.Trim(),
+                    item.Translation.Trim(),
+                    item.Example.Trim(),
+                    item.Explanation.Trim(),
+                    item.ImagePrompt.Trim(),
+                    item.ExtraExample.Trim(),
+                    item.UsageNote.Trim(),
+                    item.ImageAlt.Trim(),
+                    "placeholder",
+                    Math.Clamp(item.AiConfidence, 0, 1),
+                    null,
+                    false,
+                    true,
+                    false,
+                    false))
+                .ToArray();
 
-        return new LessonContentGenerationResponseDto(
-            vocabulary,
-            quizQuestions,
-            ToConversationDto(payload.ConversationConfig),
-            provider);
+            var quizQuestions = payload.QuizQuestions
+                .Select((question, index) => new LessonQuizQuestionDto(
+                    string.IsNullOrWhiteSpace(question.Id) ? $"quiz-ai-{index + 1}" : question.Id,
+                    question.Type,
+                    question.Prompt.Trim(),
+                    question.Options,
+                    question.CorrectAnswer.Trim(),
+                    question.Feedback.Trim(),
+                    question.Enabled))
+                .ToArray();
+
+            logger.LogInformation(
+                "[LessonAI][PROCESS][SUCCESS] LessonId={LessonId} Provider={Provider} VocabularyCount={VocabularyCount} QuizCount={QuizCount} CorrelationId={CorrelationId} DurationMs={DurationMs}",
+                request.LessonId,
+                provider,
+                vocabulary.Length,
+                quizQuestions.Length,
+                correlationId,
+                timer.ElapsedMilliseconds);
+
+            return new LessonContentGenerationResponseDto(
+                vocabulary,
+                quizQuestions,
+                ToConversationDto(payload.ConversationConfig),
+                provider);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "[LessonAI][PROCESS][ERROR] LessonId={LessonId} CorrelationId={CorrelationId} DurationMs={DurationMs}",
+                request.LessonId,
+                correlationId,
+                timer.ElapsedMilliseconds);
+            throw;
+        }
     }
 
     public async Task<LessonConversationTurnResponseDto> CreateConversationTurnAsync(

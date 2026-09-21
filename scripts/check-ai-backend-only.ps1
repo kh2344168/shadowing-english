@@ -10,8 +10,11 @@ if (!(Test-Path $service)) { throw "Missing $service" }
 if (Select-String -Path $service -Pattern '/__ai/|FRONTEND_AI_TEST_CONFIG|api\.groq\.com|api\.mistral\.ai|generativelanguage\.googleapis\.com|api\.pexels\.com' -Quiet) {
   throw 'Frontend still contains a direct provider/proxy path.'
 }
-if ((Test-Path $proxy) -and (Select-String -Path $proxy -Pattern '/__ai/' -Quiet)) {
-  throw 'proxy.conf.json still contains /__ai routes.'
+if (Test-Path $proxy) {
+  $proxyContent = (Get-Content -Path $proxy -Raw).Trim()
+  if ($proxyContent -ne '{}') {
+    throw 'proxy.conf.json is not empty. Local development must call the Backend directly without an Angular proxy.'
+  }
 }
 if ((Test-Path $index) -and (Select-String -Path $index -Pattern 'server-config\.js' -Quiet)) {
   throw 'index.html still loads server-config.js.'

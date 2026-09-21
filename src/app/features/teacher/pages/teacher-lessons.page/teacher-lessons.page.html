@@ -45,7 +45,7 @@
         <select [(ngModel)]="selectedStatus" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
           <option value="all">كل الحالات</option>
           <option value="ready">جاهز</option>
-          <option value="processing">يحتاج معالجة</option>
+          <option value="processing">الشادوينج جاهز</option>
           <option value="draft">مسودة</option>
           <option value="archived">مؤرشف</option>
         </select>
@@ -115,7 +115,7 @@
               <span>فتح الدرس</span><span class="material-symbols-outlined text-[18px]">arrow_left</span>
             </a>
             <a *ngIf="lessonDisplayStatus(lesson) === 'processing'" [routerLink]="[contentBasePath + '/lessons', lesson.id, 'processing']" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#00685F] text-sm font-semibold text-white no-underline transition hover:bg-[#004E47]">
-              <span class="material-symbols-outlined text-[18px]">auto_awesome</span><span>معالجة المحتوى</span>
+              <span class="material-symbols-outlined text-[18px]">auto_awesome</span><span>ابدأ معالجة الكلمات والصور</span>
             </a>
             <a *ngIf="lessonDisplayStatus(lesson) === 'draft'" [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: lesson.id }" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#EFF4FF] text-sm font-semibold text-[#3E4947] no-underline transition hover:bg-[#E5EEFF]">
               <span class="material-symbols-outlined text-[18px]">edit</span><span>متابعة التعديل</span>

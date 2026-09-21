@@ -119,15 +119,20 @@ export class TeacherLessonsPage {
     return conversation?.conversationConfig?.level || '—';
   }
 
+  hasCompletedShadowing(lesson: CourseLesson): boolean {
+    return lesson.segments.length > 0 && Boolean(lesson.mediaFileName?.trim());
+  }
+
   lessonDisplayStatus(lesson: CourseLesson): 'ready' | 'processing' | 'draft' | 'archived' {
     if (lesson.status === 'archived') return 'archived';
+    if (this.hasCompletedShadowing(lesson) && this.needsAiProcessing(lesson)) return 'processing';
     if (lesson.status === 'draft') return 'draft';
     return this.needsAiProcessing(lesson) ? 'processing' : 'ready';
   }
 
   statusLabel(lesson: CourseLesson): string {
     const status = this.lessonDisplayStatus(lesson);
-    return ({ ready: 'جاهز', processing: 'يحتاج معالجة', draft: 'مسودة', archived: 'مؤرشف' } as const)[status];
+    return ({ ready: 'جاهز', processing: 'الشادوينج جاهز', draft: 'مسودة', archived: 'مؤرشف' } as const)[status];
   }
 
   toggleMenu(lessonId: string): void {

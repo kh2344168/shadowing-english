@@ -1,13 +1,12 @@
 import { Injectable } from '@angular/core';
+import { API_BASE_URL } from '../../../core/api/api.config';
 import {
   CONVERSATION_SCHEMA,
   JsonSchema,
-  LESSON_CONTENT_SCHEMA,
 } from '../../../core/ai/frontend-ai.schemas';
 import {
   buildConversationContext,
   buildConversationInstructions,
-  LESSON_PROCESSING_INSTRUCTIONS,
 } from '../../../core/ai/frontend-ai.prompts';
 import {
   LessonAiStatusResponse,
@@ -19,11 +18,7 @@ import {
   LessonImageGenerationResponse,
   LessonTextProvider,
 } from './lesson-ai.models';
-import {
-  LessonConversationConfig,
-  LessonQuizQuestion,
-  LessonVocabularyItem,
-} from './lesson.models';
+import { LessonConversationConfig } from './lesson.models';
 
 export class LessonAiRequestError extends Error {
   constructor(
@@ -50,7 +45,7 @@ type StructuredBackendResponse = {
 export class LessonAiApiService {
   private readonly timeoutMs = 90_000;
   private readonly statusTimeoutMs = 25_000;
-  private readonly baseUrl = '/api/lesson-ai';
+  private readonly baseUrl = `${API_BASE_URL}/lesson-ai`;
 
   async getStatus(verify = false): Promise<LessonAiStatusResponse> {
     return this.requestJson<LessonAiStatusResponse>(
@@ -64,25 +59,20 @@ export class LessonAiApiService {
   async generateLessonDraft(
     request: LessonContentGenerationRequest,
   ): Promise<LessonContentGenerationResponse> {
-    const userContent = JSON.stringify({
-      lessonTitle: request.lessonTitle,
-      teacherProfile: request.contentProfile,
-      sourceSentences: request.segments,
-    });
-
-    const result = await this.generateStructuredViaBackend(
+    // Lesson generation uses the dedicated, server-owned /process contract instead
+    // of the generic /structured endpoint. This keeps prompts/schemas on the
+    // Backend and remains compatible with older local API builds that already
+    // exposed /process but did not yet expose /structured.
+    const payload = await this.requestJson<LessonContentGenerationResponse>(
+      `${this.baseUrl}/process`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      },
       'content',
-      LESSON_PROCESSING_INSTRUCTIONS,
-      userContent,
-      'lesson_content_review_draft',
-      LESSON_CONTENT_SCHEMA,
+      this.timeoutMs,
     );
-
-    const payload = result.data as {
-      vocabulary: LessonVocabularyItem[];
-      quizQuestions: LessonQuizQuestion[];
-      conversationConfig: LessonConversationConfig;
-    };
 
     return {
       vocabulary: (payload.vocabulary || [])
@@ -115,7 +105,7 @@ export class LessonAiApiService {
         enabled: question.enabled !== false,
       })),
       conversationConfig: this.normalizeConversationConfig(payload.conversationConfig),
-      provider: result.provider,
+      provider: this.normalizeProvider(payload.provider),
     };
   }
 
