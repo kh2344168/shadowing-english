@@ -1,657 +1,138 @@
---- /mnt/data/latest_before/src/app/features/lessons/pages/lesson-builder/lesson-builder.page.ts	2026-09-21 09:16:25.794629336 +0000
-+++ /mnt/data/work_shadowing/src/app/features/lessons/pages/lesson-builder/lesson-builder.page.ts	2026-09-21 09:14:08.911806027 +0000
-@@ -8,8 +8,6 @@
- import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
- import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
- import { LessonRepository } from '../../data-access/lesson.repository';
--import { LessonAiApiService } from '../../data-access/lesson-ai-api.service';
--import { LessonContentGenerationResponse, LessonAiStatusResponse } from '../../data-access/lesson-ai.models';
- import {
-   CourseLesson,
-   LessonActivity,
-@@ -23,14 +21,12 @@
-   LocalWhisperAlignmentService,
- } from '../../services/local-whisper-alignment.service';
- import { ScriptLineAlignment } from '../../services/script-alignment.util';
--import { LessonContentAiService } from '../../services/lesson-content-ai.service';
- 
- type AppView = 'teacher-dashboard' | 'lesson-builder' | 'student-dashboard' | 'student-player' | 'teacher-progress';
- type PauseMode = 'same' | 'plus2' | 'plus5' | 'custom';
- type TrainingState = 'empty' | 'ready' | 'teacher' | 'student' | 'finished' | 'stopped';
- type RecordingMode = 'per-repetition' | 'one-session';
- type ProgressStatus = 'not-started' | 'in-progress' | 'completed';
--type BuilderAiStage = 'idle' | 'analyzing' | 'analysis-ready' | 'enriching' | 'completed' | 'error';
- 
- interface StudentAccount {
-   id: string;
-@@ -191,18 +187,6 @@
-   autoSplitStartPaddingSeconds = 1;
-   autoAlignmentResults: ScriptLineAlignment[] = [];
- 
--  aiProcessingStage: BuilderAiStage = 'idle';
--  aiProcessingPercent = 0;
--  aiProcessingTitle = '';
--  aiProcessingDetail = '';
--  aiProcessingError = '';
--  aiProcessingProvider = '';
--  aiProcessingImageWarning = '';
--  aiGeneratedImageCount = 0;
--  aiStatus: LessonAiStatusResponse | null = null;
--  pendingAiContent: LessonContentGenerationResponse | null = null;
--  pendingAiLesson: CourseLesson | null = null;
--
-   lessonCurrentTime = 0;
-   lessonDuration = 0;
-   isLessonPlaying = false;
-@@ -251,8 +235,6 @@
-     private route: ActivatedRoute,
-     private router: Router,
-     private lessonRepository: LessonRepository,
--    private lessonAiApi: LessonAiApiService,
--    private lessonContentAi: LessonContentAiService,
-     private localWhisperAlignment: LocalWhisperAlignmentService,
-     private diagnostics: AppDiagnosticsService,
-     public auth: AuthService,
-@@ -262,46 +244,6 @@
-     return this.auth.isTeacher() ? '/teacher' : '/admin';
-   }
- 
--  get aiVocabularyPreviewCount(): number {
--    return this.pendingAiLesson?.vocabulary?.filter((item) => item.includeForStudent !== false).length
--      || this.pendingAiContent?.vocabulary?.length
--      || 0;
--  }
--
--  get aiQuizPreviewCount(): number {
--    const activities = this.pendingAiLesson?.activities || [];
--    const quiz = activities.find((item) => item.type === 'quiz');
--    return quiz?.quizQuestions?.filter((item) => item.enabled !== false).length
--      || this.pendingAiContent?.quizQuestions?.filter((item) => item.enabled !== false).length
--      || 0;
--  }
--
--  get aiConversationReady(): boolean {
--    if (this.pendingAiLesson) {
--      return (this.pendingAiLesson.activities || []).some(
--        (item) => item.type === 'ai-conversation' && item.enabled !== false,
--      );
--    }
--    return Boolean(this.pendingAiContent?.conversationConfig?.scenario?.trim());
--  }
--
--  get aiAnalysisTopic(): string {
--    return this.pendingAiContent?.conversationConfig?.topic?.trim()
--      || this.lessonTopic.trim()
--      || 'تم تحديد الموضوع من محتوى الدرس';
--  }
--
--  get aiAnalysisScenario(): string {
--    return this.pendingAiContent?.conversationConfig?.scenario?.trim() || '';
--  }
--
--  get aiAnalysisGoals(): string[] {
--    return (this.pendingAiContent?.conversationConfig?.goals || [])
--      .map((item) => String(item).trim())
--      .filter(Boolean)
--      .slice(0, 4);
--  }
--
-   ngOnInit(): void {
-     this.loadStore();
-     this.ensureDemoStudents();
-@@ -492,7 +434,6 @@
- 
-   startNewLesson(): void {
-     this.lessonSavedMessage = '';
--    this.resetAiProcessingState();
-     if (this.hasBuilderDraft && this.view !== 'lesson-builder') {
-       const shouldDiscard = confirm('There is an unfinished lesson draft saved in this browser. Start a new empty lesson and discard the draft?');
-       if (!shouldDiscard) {
-@@ -537,7 +478,6 @@
- 
-   async editLesson(lesson: CourseLesson): Promise<void> {
-     this.stopAllPlaybackAndRecording(false);
--    this.resetAiProcessingState();
-     this.editingLessonId = lesson.id;
-     this.selectedLessonId = lesson.id;
-     this.lessonTitle = lesson.title;
-@@ -1132,191 +1072,34 @@
-   }
- 
-   async finishLessonAndSave(): Promise<void> {
--    const saved = await this.saveLesson();
--    if (!saved || !this.editingLessonId) return;
--
--    if (this.auth.isAdmin()) {
--      await this.startLessonAiAnalysis();
--      return;
--    }
--
--    if (this.auth.isTeacher()) {
--      await this.router.navigate([
--        `${this.contentBasePath}/lessons`,
--        this.editingLessonId,
--        'processing',
--      ]);
--    }
--  }
--
--  async startLessonAiAnalysis(): Promise<void> {
--    if (!this.editingLessonId || this.aiProcessingStage === 'analyzing' || this.aiProcessingStage === 'enriching') return;
--
--    const lesson = this.lessonRepository.getById(this.editingLessonId)
--      || this.lessons.find((item) => item.id === this.editingLessonId)
--      || null;
--    if (!lesson) {
--      this.aiProcessingStage = 'error';
--      this.aiProcessingError = 'تعذر العثور على الدرس المحفوظ لبدء المعالجة.';
--      return;
--    }
-+    const elapsed = this.diagnostics.start('LessonBuilder', 'SHADOWING_SAVE', {
-+      lessonId: this.editingLessonId || 'new',
-+      segmentCount: this.segments.length,
-+      hasMedia: Boolean(this.currentMediaBlob),
-+    });
- 
--    const elapsed = this.diagnostics.start('LessonBuilderAI', 'lesson-analysis', {
--      lessonId: lesson.id,
--      segmentCount: lesson.segments.length,
-+    const saved = await this.saveLesson();
-+    this.diagnostics.check('LessonBuilder', 'SHADOWING_SAVE_RESULT', saved, {
-+      lessonId: this.editingLessonId || 'unknown',
-+      segmentCount: this.segments.length,
-     });
--    this.aiProcessingStage = 'analyzing';
--    this.aiProcessingPercent = 8;
--    this.aiProcessingTitle = 'فحص جاهزية الذكاء الاصطناعي';
--    this.aiProcessingDetail = 'نتأكد من اتصال الـBackend ثم نحلل نص الدرس.';
--    this.aiProcessingError = '';
--    this.aiProcessingImageWarning = '';
--    this.aiGeneratedImageCount = 0;
--    this.pendingAiContent = null;
--    this.pendingAiLesson = null;
--    this.cdr.detectChanges();
- 
--    try {
--      this.aiStatus = await this.lessonAiApi.getStatus(true);
--      this.diagnostics.check(
--        'LessonBuilderAI',
--        'content-provider-ready',
--        this.aiStatus.content.state === 'available',
--        { state: this.aiStatus.content.state, model: this.aiStatus.content.model },
-+    if (!saved || !this.editingLessonId) {
-+      this.diagnostics.error(
-+        'LessonBuilder',
-+        'SHADOWING_SAVE:error',
-+        new Error('Shadowing save did not complete.'),
-+        { durationMs: elapsed(), segmentCount: this.segments.length },
-       );
--      if (this.aiStatus.content.state !== 'available') {
--        throw new Error(this.aiStatus.content.message);
--      }
--
--      this.aiProcessingPercent = 28;
--      this.aiProcessingTitle = 'معالجة نص الدرس بالذكاء الاصطناعي';
--      this.aiProcessingDetail = 'نحلل الجمل ونجهز نتيجة المحتوى قبل إنشاء الكلمات وباقي المراحل.';
--      this.cdr.detectChanges();
--
--      const generated = await this.lessonAiApi.generateLessonDraft({
--        lessonId: lesson.id,
--        lessonTitle: lesson.title,
--        contentProfile: lesson.contentProfile,
--        segments: lesson.segments.map((segment) => ({
--          text: segment.text,
--          translation: segment.translation || '',
--        })),
--      });
--
--      this.pendingAiContent = generated;
--      this.aiProcessingProvider = generated.provider;
--      this.aiProcessingPercent = 50;
--      this.aiProcessingStage = 'analysis-ready';
--      this.aiProcessingTitle = 'اكتملت معالجة نص الدرس';
--      this.aiProcessingDetail = 'راجع ملخص النتيجة، ثم ابدأ تجهيز الكلمات وباقي مراحل الدرس من نفس الصفحة.';
--      this.diagnostics.success('LessonBuilderAI', 'lesson-analysis', elapsed(), {
--        lessonId: lesson.id,
--        provider: generated.provider,
--        vocabularyCount: generated.vocabulary.length,
--        quizCount: generated.quizQuestions.length,
--      });
--    } catch (error) {
--      this.aiProcessingStage = 'error';
--      this.aiProcessingPercent = 0;
--      this.aiProcessingTitle = 'تعذرت معالجة نص الدرس';
--      this.aiProcessingError = this.lessonAiApi.getUserMessage(error);
--      this.diagnostics.error('LessonBuilderAI', 'lesson-analysis:error', error, {
--        lessonId: lesson.id,
--        durationMs: elapsed(),
--      });
--    } finally {
--      this.cdr.detectChanges();
--    }
--  }
--
--  async startAiContentGeneration(): Promise<void> {
--    if (!this.editingLessonId || !this.pendingAiContent || this.aiProcessingStage === 'enriching') return;
--
--    const lesson = this.lessonRepository.getById(this.editingLessonId)
--      || this.lessons.find((item) => item.id === this.editingLessonId)
--      || null;
--    if (!lesson) {
--      this.aiProcessingStage = 'error';
--      this.aiProcessingError = 'تعذر العثور على الدرس المحفوظ لاستكمال المعالجة.';
-       return;
-     }
- 
--    const elapsed = this.diagnostics.start('LessonBuilderAI', 'content-generation', {
--      lessonId: lesson.id,
--      provider: this.pendingAiContent.provider,
-+    this.diagnostics.success('LessonBuilder', 'SHADOWING_SAVE', elapsed(), {
-+      lessonId: this.editingLessonId,
-+      nextStage: 'lesson-library',
-     });
--    this.aiProcessingStage = 'enriching';
--    this.aiProcessingPercent = 55;
--    this.aiProcessingTitle = 'تجهيز الكلمات وباقي المراحل';
--    this.aiProcessingDetail = 'يتم تجهيز الكلمات، اسمع واكتب، الاختبار والمحادثة داخل نفس عملية المعالجة.';
--    this.aiProcessingError = '';
--    this.aiProcessingImageWarning = '';
--    this.cdr.detectChanges();
- 
--    try {
--      let generated = await this.lessonContentAi.generateReviewDraft(
--        lesson,
--        (progress) => {
--          this.aiProcessingPercent = Math.min(90, 55 + Math.round(progress.percent * 0.38));
--          this.aiProcessingTitle = progress.title;
--          this.aiProcessingDetail = progress.detail;
--          this.cdr.detectChanges();
--        },
--        this.pendingAiContent,
--      );
--
--      if (this.aiStatus?.images.state === 'available') {
--        this.aiGeneratedImageCount = await this.generateBuilderVocabularyImages(generated);
--      } else if (this.aiStatus?.images.message) {
--        this.aiProcessingImageWarning = `${this.aiStatus.images.message} تم إبقاء الكلمات بدون صور بدل استخدام صور تجريبية.`;
--      }
--
--      generated = {
--        ...generated,
--        status: 'ready',
--        activities: (generated.activities || []).map((activity) => ({
--          ...activity,
--          reviewStatus: 'approved',
--        })),
--        vocabulary: (generated.vocabulary || []).map((item) => ({
--          ...item,
--          imageApproved: Boolean(item.imageUrl?.trim() && item.imageProvider !== 'placeholder'),
--        })),
--        updatedAt: new Date().toISOString(),
--      };
--
--      this.aiProcessingPercent = 96;
--      this.aiProcessingTitle = 'حفظ نتيجة المعالجة';
--      this.aiProcessingDetail = 'نحفظ الكلمات والأنشطة في الـBackend حتى لا تضيع النتيجة.';
--      this.cdr.detectChanges();
--
--      const saved = await this.lessonRepository.saveLessonToDatabaseStrict(generated);
--      this.pendingAiLesson = saved;
--      this.lessons = this.lessonRepository.getAll();
--      this.vocabulary = (saved.vocabulary || []).map((item) => ({ ...item }));
--      this.activities = this.normalizeActivities(saved.activities);
--      this.aiProcessingPercent = 100;
--      this.aiProcessingStage = 'completed';
--      this.aiProcessingTitle = 'اكتملت معالجة الدرس';
--      this.aiProcessingDetail = 'تم حفظ الكلمات وباقي المراحل. يمكنك فتح المراجعة أو الاستمرار في تعديل الدرس.';
--      this.lessonSavedMessage = 'تم حفظ الدرس ونتيجة معالجة الذكاء الاصطناعي في الـBackend.';
--      this.diagnostics.success('LessonBuilderAI', 'content-generation', elapsed(), {
--        lessonId: saved.id,
--        vocabularyCount: saved.vocabulary?.length || 0,
--        activityCount: saved.activities?.length || 0,
--        generatedImageCount: this.aiGeneratedImageCount,
--      });
--    } catch (error) {
--      this.aiProcessingStage = 'error';
--      this.aiProcessingTitle = 'تعذر استكمال معالجة الدرس';
--      this.aiProcessingError = this.lessonAiApi.getUserMessage(error);
--      this.diagnostics.error('LessonBuilderAI', 'content-generation:error', error, {
--        lessonId: lesson.id,
--        durationMs: elapsed(),
--      });
--    } finally {
--      this.cdr.detectChanges();
--    }
-+    await this.router.navigate([`${this.contentBasePath}/lessons`]);
-   }
- 
-   async discardBuilderDraft(): Promise<void> {
-@@ -1345,46 +1128,29 @@
-         learningObjective: this.lessonLearningObjective.trim(),
-         teacherNotes: this.lessonTeacherNotes.trim(),
-       },
--      status: 'draft',
-+      status: existing?.status || 'draft',
-       weekName: '',
-       dayName: '',
-       requiredRepetitions: Math.max(Number(this.requiredRepetitions) || 10, 1),
-       mediaFileName: this.currentMediaFileName || 'lesson-file',
-       mediaType: this.currentMediaType || this.currentMediaBlob.type || 'application/octet-stream',
-       segments: this.segments.map((segment) => ({ ...segment })),
--      vocabulary: this.vocabulary
--        .filter((item) => item.term.trim())
--        .map((item) => ({
--          term: item.term.trim(),
--          id: item.id,
--          kind: item.kind || (item.term.trim().includes(' ') ? 'chunk' : 'word'),
--          translation: item.translation.trim(),
--          example: item.example.trim() || item.term.trim(),
--          explanation: item.explanation?.trim() || '',
--          imagePrompt: item.imagePrompt?.trim() || '',
--          extraExample: item.extraExample?.trim() || '',
--          usageNote: item.usageNote?.trim() || '',
--          imageAlt: item.imageAlt?.trim() || '',
--          imageProvider: item.imageProvider,
--          aiConfidence: Math.min(1, Math.max(0, Number(item.aiConfidence) || 0)),
--          imageUrl: item.imageUrl?.trim() || '',
--          imageApproved: Boolean(item.imageUrl?.trim() && item.imageApproved),
--          includeForStudent: item.includeForStudent !== false,
--          repeatForReview: Boolean(item.repeatForReview),
--          testLater: Boolean(item.testLater),
--        })),
--      activities: this.activities.map((activity, order) => ({
--        ...activity,
--        order,
--        enabled: true,
--        aiGenerated: false,
--        reviewStatus: 'pending',
--        title: activity.title.trim() || this.activityTypeLabel(activity.type),
--        questionCount:
--          activity.type === 'ai-conversation'
--            ? Math.max(6, Number(activity.questionCount) || 6)
--            : undefined,
--      })),
-+      // The builder owns only the shadowing stage. Existing AI-generated content
-+      // is preserved when editing a lesson and is never regenerated from this page.
-+      vocabulary: existing?.vocabulary?.map((item) => ({ ...item })) || [],
-+      activities: existing?.activities?.length
-+        ? existing.activities.map((activity, order) => ({ ...activity, order }))
-+        : [
-+            {
-+              id: 'shadowing',
-+              type: 'shadowing',
-+              title: 'Shadowing',
-+              order: 0,
-+              enabled: true,
-+              reviewStatus: 'pending',
-+              aiGenerated: false,
-+            },
-+          ],
-       scriptLines: [...this.scriptLines],
-       createdAt: existing?.createdAt || now,
-       updatedAt: now,
-@@ -1420,84 +1186,12 @@
-     this.ensureProgressRowsForLesson(savedLesson);
-     this.saveStore();
-     await this.clearBuilderDraft(false);
--    this.lessonSavedMessage = this.auth.isAdmin()
--      ? 'تم حفظ الدرس في الـBackend. يبدأ الآن تحليل النص بالذكاء الاصطناعي في نفس الصفحة.'
--      : 'تم حفظ الدرس داخل مكتبة الدروس. الخطوة التالية: أضفه إلى المنهج ثم انشره للمجموعة.';
-+    this.lessonSavedMessage =
-+      'تم حفظ مرحلة الشادوينج بنجاح. يمكنك بدء معالجة الكلمات والصور من مكتبة الدروس.';
-     this.view = 'lesson-builder';
-     return true;
-   }
- 
--  private async generateBuilderVocabularyImages(lesson: CourseLesson): Promise<number> {
--    const items = (lesson.vocabulary || []).filter(
--      (item) => item.includeForStudent !== false && item.term.trim(),
--    );
--    if (!items.length) return 0;
--
--    const failed: string[] = [];
--    let generatedCount = 0;
--    let completedCount = 0;
--    let nextIndex = 0;
--
--    const worker = async (): Promise<void> => {
--      while (true) {
--        const index = nextIndex++;
--        if (index >= items.length) return;
--        const item = items[index];
--
--        try {
--          const result = await this.lessonAiApi.generateImage({
--            lessonId: lesson.id,
--            term: item.term,
--            kind: item.kind === 'chunk' ? 'chunk' : 'word',
--            prompt: item.imagePrompt?.trim()
--              || `A realistic educational scene that communicates “${item.term}” without written text.`,
--            alt: item.imageAlt?.trim() || `Context image for ${item.term}`,
--          });
--          item.imageUrl = result.imageUrl;
--          item.imageProvider = 'curated';
--          item.imageApproved = true;
--          generatedCount += 1;
--        } catch (error) {
--          failed.push(`${item.term}: ${this.lessonAiApi.getUserMessage(error)}`);
--          if (item.imageProvider === 'placeholder') {
--            item.imageUrl = '';
--            item.imageApproved = false;
--            item.imageProvider = undefined;
--          }
--        } finally {
--          completedCount += 1;
--          this.aiProcessingPercent = 90 + Math.round((completedCount / Math.max(items.length, 1)) * 5);
--          this.aiProcessingTitle = `تجهيز صور الكلمات ${completedCount}/${items.length}`;
--          this.aiProcessingDetail = 'تتم معالجة حتى 3 صور بالتوازي، وباقي مراحل الدرس جاهزة بالفعل.';
--          this.cdr.detectChanges();
--        }
--      }
--    };
--
--    await Promise.all(
--      Array.from({ length: Math.min(3, items.length) }, () => worker()),
--    );
--
--    if (failed.length) {
--      this.aiProcessingImageWarning = `تم توليد ${generatedCount} من ${items.length} صور. تعذر: ${failed.join(' | ')}`;
--    }
--    return generatedCount;
--  }
--
--  private resetAiProcessingState(): void {
--    this.aiProcessingStage = 'idle';
--    this.aiProcessingPercent = 0;
--    this.aiProcessingTitle = '';
--    this.aiProcessingDetail = '';
--    this.aiProcessingError = '';
--    this.aiProcessingProvider = '';
--    this.aiProcessingImageWarning = '';
--    this.aiGeneratedImageCount = 0;
--    this.aiStatus = null;
--    this.pendingAiContent = null;
--    this.pendingAiLesson = null;
--  }
--
-   async deleteLesson(lesson: CourseLesson): Promise<void> {
-     if (!confirm(`Delete ${lesson.title}?`)) return;
- 
---- /mnt/data/latest_before/src/app/features/lessons/pages/lesson-builder/lesson-builder.page.html	2026-09-21 09:16:25.805888849 +0000
-+++ /mnt/data/work_shadowing/src/app/features/lessons/pages/lesson-builder/lesson-builder.page.html	2026-09-21 09:14:34.565226755 +0000
-@@ -22,13 +22,13 @@
-         <h1>{{ editingLessonId ? 'تعديل الدرس' : 'إنشاء درس جديد' }}</h1>
-         <span class="builder-status-pill">{{ editingLessonId ? 'مسودة قابلة للتعديل' : 'درس جديد' }}</span>
-       </div>
--      <p>أضف بيانات الدرس والملف الصوتي، راجع تقسيم الجمل، ثم احفظ لبدء تحليل النص بالذكاء الاصطناعي في نفس الصفحة.</p>
-+      <p>أضف بيانات الدرس والملف الصوتي، راجع تقسيم الشادوينج والتوقيت، ثم احفظ المرحلة في مكتبة الدروس.</p>
-     </div>
-     <div class="builder-top-actions">
-       <span class="builder-autosave" *ngIf="hasBuilderDraft"><span class="material-symbols-outlined">check_circle</span>{{ isSavingBuilderDraft ? 'جاري حفظ المسودة...' : 'المسودة محفوظة' }}</span>
-       <a *ngIf="editingLessonId" class="button ghost" [routerLink]="[contentBasePath + '/lessons', editingLessonId, 'content-review']">معاينة ومراجعة المحتوى</a>
-       <button type="button" class="ghost" (click)="saveDraftNow()">حفظ مسودة</button>
--      <button type="button" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">{{ auth.isAdmin() ? 'حفظ وتحليل الدرس' : 'حفظ الدرس' }}</button>
-+      <button type="button" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">حفظ الشادوينج</button>
-     </div>
-   </header>
- 
-@@ -37,7 +37,7 @@
-       <div class="section-head">
-         <div>
-           <h2>{{ editingLessonId ? 'تعديل الدرس' : 'إنشاء درس جديد' }}</h2>
--          <p class="hint">ارفع الصوت والنص، راجع التقسيم والتوقيت، ثم احفظ. ستظهر نتيجة تحليل النص هنا أولًا، وبعدها تبدأ معالجة الكلمات وباقي المراحل من نفس الصفحة.</p>
-+          <p class="hint">ارفع الصوت والنص، راجع تقسيم الجمل والتوقيت، ثم احفظ الشادوينج. معالجة الكلمات والصور تبدأ لاحقًا من مكتبة الدروس.</p>
-         </div>
- 
-         <a class="button ghost" [routerLink]="contentBasePath + '/lessons'">الرجوع للمكتبة</a>
-@@ -90,7 +90,7 @@
-         <input id="scriptInput" type="file" accept=".txt,.json,text/plain,application/json" (change)="onScriptSelected($event)" hidden />
- 
-         <button type="button" class="ghost" (click)="saveDraftNow()">حفظ مسودة</button>
--        <button type="button" class="secondary" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">{{ auth.isAdmin() ? 'حفظ وتحليل الدرس' : 'إنهاء وحفظ الدرس' }}</button>
-+        <button type="button" class="secondary" (click)="finishLessonAndSave()" [disabled]="!canSaveLesson">حفظ الشادوينج</button>
-       </div>
- 
-       <p class="file-name" *ngIf="currentMediaFileName">Media: {{ currentMediaFileName }}</p>
-@@ -101,95 +101,8 @@
-       <section *ngIf="lessonSavedMessage" class="rounded-2xl border border-[#BFE7E3] bg-[#F1FBFA] p-4">
-         <strong class="block text-sm font-black text-[#0F766E]">{{ lessonSavedMessage }}</strong>
-         <div class="mt-3 flex flex-wrap gap-2">
--          <a class="button secondary" [routerLink]="contentBasePath + (auth.isTeacher() ? '/curriculum' : '/curriculums')">2 · أضف الدرس إلى المنهج</a>
--          <a class="button ghost" [routerLink]="contentBasePath + '/groups'">3 · احفظ ثم انشر للطلاب</a>
--        </div>
--      </section>
--
--      <section *ngIf="auth.isAdmin() && aiProcessingStage !== 'idle'" class="mt-4 rounded-[24px] border border-[#D7E5E3] bg-white p-5 shadow-[0_14px_40px_rgba(15,23,42,.06)]">
--        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
--          <div>
--            <span class="text-xs font-black text-[#0F766E]">معالجة الدرس بالذكاء الاصطناعي</span>
--            <h3 class="mt-1 text-lg font-black text-[#0B2A56]">{{ aiProcessingTitle || 'تجهيز المعالجة' }}</h3>
--            <p class="mt-1 text-xs font-bold leading-6 text-[#64748B]">{{ aiProcessingDetail }}</p>
--          </div>
--          <span class="w-fit rounded-full px-3 py-1 text-xs font-black"
--                [ngClass]="aiProcessingStage === 'completed' ? 'bg-[#DDF7EC] text-[#005137]' : aiProcessingStage === 'error' ? 'bg-[#FFDAD6] text-[#93000A]' : 'bg-[#FFF0D8] text-[#825100]'">
--            {{ aiProcessingStage === 'completed' ? 'اكتملت' : aiProcessingStage === 'error' ? 'تحتاج إعادة المحاولة' : aiProcessingPercent + '%' }}
--          </span>
--        </div>
--
--        <div *ngIf="aiProcessingStage !== 'error'" class="mt-4 h-2 overflow-hidden rounded-full bg-[#E8F0EE]">
--          <span class="block h-full rounded-full bg-[#17B3A6] transition-all" [style.width.%]="aiProcessingPercent"></span>
--        </div>
--
--        <div *ngIf="aiProcessingError" class="mt-4 rounded-2xl border border-[#FECACA] bg-[#FEF2F2] p-4">
--          <strong class="block text-sm font-black text-[#B91C1C]">{{ aiProcessingError }}</strong>
--          <button type="button" class="secondary mt-3" (click)="pendingAiContent ? startAiContentGeneration() : startLessonAiAnalysis()">{{ pendingAiContent ? 'إعادة استكمال الكلمات وباقي المراحل' : 'إعادة معالجة نص الدرس' }}</button>
--        </div>
--
--        <div *ngIf="pendingAiContent && aiProcessingStage !== 'analyzing' && aiProcessingStage !== 'error'" class="mt-5 rounded-[20px] border border-[#BFE7E3] bg-[#F8FEFD] p-4">
--          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
--            <div>
--              <strong class="block text-sm font-black text-[#0B2A56]">نتيجة معالجة النص جاهزة</strong>
--              <span class="mt-1 block text-xs font-bold text-[#64748B]">المزود: {{ aiProcessingProvider || pendingAiContent.provider }}</span>
--            </div>
--            <span class="w-fit rounded-full bg-[#DDF7EC] px-3 py-1 text-xs font-black text-[#005137]">المرحلة الأولى تمت</span>
--          </div>
--
--          <div class="mt-4 rounded-2xl border border-[#D7E5E3] bg-white p-4">
--            <span class="text-xs font-bold text-[#64748B]">نتيجة فهم الدرس</span>
--            <strong class="mt-1 block text-sm font-black text-[#0B2A56]">{{ aiAnalysisTopic }}</strong>
--            <p *ngIf="aiAnalysisScenario" class="mt-2 text-xs font-bold leading-6 text-[#64748B]">{{ aiAnalysisScenario }}</p>
--            <div *ngIf="aiAnalysisGoals.length" class="mt-3 flex flex-wrap gap-2">
--              <span *ngFor="let goal of aiAnalysisGoals" class="rounded-full bg-[#EFFBF8] px-3 py-1 text-[11px] font-black text-[#005137]">{{ goal }}</span>
--            </div>
--          </div>
--
--          <div class="mt-4 grid gap-3 sm:grid-cols-3">
--            <article class="rounded-2xl border border-[#D7E5E3] bg-white p-4">
--              <span class="text-xs font-bold text-[#64748B]">كلمات وChunks مقترحة</span>
--              <strong class="mt-1 block text-2xl font-black text-[#0F766E]">{{ aiVocabularyPreviewCount }}</strong>
--            </article>
--            <article class="rounded-2xl border border-[#D7E5E3] bg-white p-4">
--              <span class="text-xs font-bold text-[#64748B]">أسئلة اختبار</span>
--              <strong class="mt-1 block text-2xl font-black text-[#0F766E]">{{ aiQuizPreviewCount }}</strong>
--            </article>
--            <article class="rounded-2xl border border-[#D7E5E3] bg-white p-4">
--              <span class="text-xs font-bold text-[#64748B]">محادثة الدرس</span>
--              <strong class="mt-1 block text-sm font-black" [ngClass]="aiConversationReady ? 'text-[#005137]' : 'text-[#B7791F]'">{{ aiConversationReady ? 'جاهزة للتجهيز' : 'غير متاحة' }}</strong>
--            </article>
--          </div>
--
--          <button *ngIf="aiProcessingStage === 'analysis-ready'" type="button" class="mt-4 h-11 rounded-2xl bg-[#00685F] px-5 text-sm font-black text-white" (click)="startAiContentGeneration()">
--            ابدأ معالجة الكلمات وباقي المراحل
--          </button>
--        </div>
--
--        <div *ngIf="aiProcessingStage === 'enriching' || aiProcessingStage === 'completed'" class="mt-4 grid gap-3 md:grid-cols-4">
--          <article class="rounded-2xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
--            <strong class="block text-sm font-black text-[#0B2A56]">الكلمات والصور</strong>
--            <span class="mt-1 block text-xs font-bold text-[#64748B]">{{ aiProcessingStage === 'completed' ? aiVocabularyPreviewCount + ' عنصر' : 'جاري التجهيز...' }}</span>
--          </article>
--          <article class="rounded-2xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
--            <strong class="block text-sm font-black text-[#0B2A56]">اسمع واكتب</strong>
--            <span class="mt-1 block text-xs font-bold text-[#64748B]">{{ aiProcessingStage === 'completed' ? 'جاهز' : 'جاري التجهيز...' }}</span>
--          </article>
--          <article class="rounded-2xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
--            <strong class="block text-sm font-black text-[#0B2A56]">الاختبار</strong>
--            <span class="mt-1 block text-xs font-bold text-[#64748B]">{{ aiProcessingStage === 'completed' ? aiQuizPreviewCount + ' سؤال' : 'جاري التجهيز...' }}</span>
--          </article>
--          <article class="rounded-2xl border border-[#E5EEFF] bg-[#FBFEFD] p-4">
--            <strong class="block text-sm font-black text-[#0B2A56]">المحادثة</strong>
--            <span class="mt-1 block text-xs font-bold text-[#64748B]">{{ aiProcessingStage === 'completed' && aiConversationReady ? 'جاهزة' : 'جاري التجهيز...' }}</span>
--          </article>
--        </div>
--
--        <p *ngIf="aiProcessingImageWarning" class="mt-4 rounded-2xl bg-[#FFF9EE] p-3 text-xs font-bold leading-5 text-[#B7791F]">{{ aiProcessingImageWarning }}</p>
--
--        <div *ngIf="aiProcessingStage === 'completed' && editingLessonId" class="mt-4 flex flex-wrap gap-2">
--          <a class="button secondary" [routerLink]="[contentBasePath + '/lessons', editingLessonId, 'content-review']">فتح مراجعة المحتوى</a>
--          <span class="inline-flex items-center rounded-xl bg-[#EFFBF8] px-3 text-xs font-black text-[#005137]">تم حفظ النتيجة في الـBackend</span>
-+          <a class="button secondary" [routerLink]="contentBasePath + '/lessons'">الرجوع إلى مكتبة الدروس</a>
-+          <a class="button ghost" [routerLink]="contentBasePath + '/groups'">المجموعات</a>
-         </div>
-       </section>
- 
---- /mnt/data/latest_before/src/app/features/teacher/pages/teacher-lessons.page/teacher-lessons.page.ts	2026-09-21 09:16:25.762627565 +0000
-+++ /mnt/data/work_shadowing/src/app/features/teacher/pages/teacher-lessons.page/teacher-lessons.page.ts	2026-09-21 09:14:08.913332446 +0000
-@@ -119,15 +119,20 @@
-     return conversation?.conversationConfig?.level || '—';
-   }
- 
-+  hasCompletedShadowing(lesson: CourseLesson): boolean {
-+    return lesson.segments.length > 0 && Boolean(lesson.mediaFileName?.trim());
-+  }
+--- /mnt/data/current_proj/src/tailwind.css	2026-09-20 19:58:36.000000000 +0000
++++ /mnt/data/student_tailwind_theme_fix/src/tailwind.css	2026-09-21 11:07:06.537553458 +0000
+@@ -1,2 +1,133 @@
+-﻿@import "tailwindcss";
+-@source "./app";
++@import "tailwindcss";
++@source "./app";
 +
-   lessonDisplayStatus(lesson: CourseLesson): 'ready' | 'processing' | 'draft' | 'archived' {
-     if (lesson.status === 'archived') return 'archived';
-+    if (this.hasCompletedShadowing(lesson) && this.needsAiProcessing(lesson)) return 'processing';
-     if (lesson.status === 'draft') return 'draft';
-     return this.needsAiProcessing(lesson) ? 'processing' : 'ready';
-   }
- 
-   statusLabel(lesson: CourseLesson): string {
-     const status = this.lessonDisplayStatus(lesson);
--    return ({ ready: 'جاهز', processing: 'يحتاج معالجة', draft: 'مسودة', archived: 'مؤرشف' } as const)[status];
-+    return ({ ready: 'جاهز', processing: 'الشادوينج جاهز', draft: 'مسودة', archived: 'مؤرشف' } as const)[status];
-   }
- 
-   toggleMenu(lessonId: string): void {
---- /mnt/data/latest_before/src/app/features/teacher/pages/teacher-lessons.page/teacher-lessons.page.html	2026-09-21 09:16:25.782628672 +0000
-+++ /mnt/data/work_shadowing/src/app/features/teacher/pages/teacher-lessons.page/teacher-lessons.page.html	2026-09-21 09:14:08.913629617 +0000
-@@ -45,7 +45,7 @@
-         <select [(ngModel)]="selectedStatus" class="h-11 rounded-xl bg-[#EFF4FF] px-3 text-sm font-semibold text-[#3E4947] outline-none">
-           <option value="all">كل الحالات</option>
-           <option value="ready">جاهز</option>
--          <option value="processing">يحتاج معالجة</option>
-+          <option value="processing">الشادوينج جاهز</option>
-           <option value="draft">مسودة</option>
-           <option value="archived">مؤرشف</option>
-         </select>
-@@ -115,7 +115,7 @@
-               <span>فتح الدرس</span><span class="material-symbols-outlined text-[18px]">arrow_left</span>
-             </a>
-             <a *ngIf="lessonDisplayStatus(lesson) === 'processing'" [routerLink]="[contentBasePath + '/lessons', lesson.id, 'processing']" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#00685F] text-sm font-semibold text-white no-underline transition hover:bg-[#004E47]">
--              <span class="material-symbols-outlined text-[18px]">auto_awesome</span><span>معالجة المحتوى</span>
-+              <span class="material-symbols-outlined text-[18px]">auto_awesome</span><span>ابدأ معالجة الكلمات والصور</span>
-             </a>
-             <a *ngIf="lessonDisplayStatus(lesson) === 'draft'" [routerLink]="[contentBasePath + '/lessons/builder']" [queryParams]="{ lessonId: lesson.id }" class="flex h-10 w-full items-center justify-center gap-1 rounded-xl bg-[#EFF4FF] text-sm font-semibold text-[#3E4947] no-underline transition hover:bg-[#E5EEFF]">
-               <span class="material-symbols-outlined text-[18px]">edit</span><span>متابعة التعديل</span>
++/*
++ * Student UI design tokens migrated from the original Tailwind config.
++ * Tailwind v4 only generates custom utilities such as bg-surface,
++ * text-on-surface, px-margin-mobile and gap-space-lg when the tokens
++ * are registered with @theme.
++ */
++@theme {
++  /* Colors */
++  --color-error-container: #ffdad6;
++  --color-on-secondary-fixed: #111c2d;
++  --color-inverse-primary: #6bd8cb;
++  --color-outline: #6d7a77;
++  --color-secondary-fixed-dim: #bcc7de;
++  --color-on-tertiary-fixed: #2a1700;
++  --color-tertiary-fixed: #ffddb8;
++  --color-on-tertiary-fixed-variant: #653e00;
++  --color-inverse-on-surface: #eff1f3;
++  --color-on-background: #191c1e;
++  --color-background: #f7f9fb;
++  --color-on-surface: #191c1e;
++  --color-surface-container-high: #e6e8ea;
++  --color-on-primary-container: #f4fffc;
++  --color-on-primary-fixed: #00201d;
++  --color-on-secondary: #ffffff;
++  --color-secondary-container: #d5e0f8;
++  --color-primary: #00685f;
++  --color-outline-variant: #bcc9c6;
++  --color-surface-container-lowest: #ffffff;
++  --color-on-primary: #ffffff;
++  --color-surface-dim: #d8dadc;
++  --color-on-secondary-fixed-variant: #3c475a;
++  --color-primary-fixed: #89f5e7;
++  --color-surface-variant: #e0e3e5;
++  --color-tertiary: #825100;
++  --color-surface-container: #eceef0;
++  --color-surface-bright: #f7f9fb;
++  --color-tertiary-container: #a36700;
++  --color-on-secondary-container: #586377;
++  --color-primary-container: #008378;
++  --color-primary-fixed-dim: #6bd8cb;
++  --color-secondary: #545f73;
++  --color-secondary-fixed: #d8e3fb;
++  --color-surface-container-low: #f2f4f6;
++  --color-inverse-surface: #2d3133;
++  --color-surface-container-highest: #e0e3e5;
++  --color-on-surface-variant: #3d4947;
++  --color-on-tertiary-container: #fffbff;
++  --color-tertiary-fixed-dim: #ffb95f;
++  --color-on-error: #ffffff;
++  --color-error: #ba1a1a;
++  --color-on-tertiary: #ffffff;
++  --color-surface-tint: #006a61;
++  --color-surface: #f7f9fb;
++  --color-on-primary-fixed-variant: #005049;
++  --color-on-error-container: #93000a;
++
++  /* Spacing */
++  --spacing-gutter-mobile: 0.75rem;
++  --spacing-space-sm: 0.5rem;
++  --spacing-space-md: 1rem;
++  --spacing-space-xl: 2.5rem;
++  --spacing-margin: 2rem;
++  --spacing-gutter: 1.25rem;
++  --spacing-space-xs: 0.25rem;
++  --spacing-space-lg: 1.5rem;
++  --spacing-margin-mobile: 1rem;
++
++  /* Font families */
++  --font-display-lg: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-body-md: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-label-md: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-display-lg-mobile: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-body-lg: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-label-sm: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-headline-lg-mobile: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-label-lg: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-body-sm: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-headline-sm: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-headline-md: "Noto Sans", "Noto Sans Arabic", sans-serif;
++  --font-headline-lg: "Noto Sans", "Noto Sans Arabic", sans-serif;
++
++  /* Typography */
++  --text-display-lg: 36px;
++  --text-display-lg--line-height: 52px;
++  --text-display-lg--font-weight: 800;
++
++  --text-body-md: 14px;
++  --text-body-md--line-height: 24px;
++  --text-body-md--font-weight: 400;
++
++  --text-label-md: 12px;
++  --text-label-md--line-height: 18px;
++  --text-label-md--font-weight: 600;
++
++  --text-display-lg-mobile: 28px;
++  --text-display-lg-mobile--line-height: 40px;
++  --text-display-lg-mobile--font-weight: 800;
++
++  --text-body-lg: 16px;
++  --text-body-lg--line-height: 28px;
++  --text-body-lg--font-weight: 500;
++
++  --text-label-sm: 11px;
++  --text-label-sm--line-height: 16px;
++  --text-label-sm--font-weight: 700;
++
++  --text-headline-lg-mobile: 22px;
++  --text-headline-lg-mobile--line-height: 32px;
++  --text-headline-lg-mobile--font-weight: 700;
++
++  --text-label-lg: 14px;
++  --text-label-lg--line-height: 20px;
++  --text-label-lg--font-weight: 700;
++
++  --text-body-sm: 12px;
++  --text-body-sm--line-height: 20px;
++  --text-body-sm--font-weight: 400;
++
++  --text-headline-sm: 18px;
++  --text-headline-sm--line-height: 28px;
++  --text-headline-sm--font-weight: 600;
++
++  --text-headline-md: 22px;
++  --text-headline-md--line-height: 32px;
++  --text-headline-md--font-weight: 700;
++
++  --text-headline-lg: 28px;
++  --text-headline-lg--line-height: 40px;
++  --text-headline-lg--font-weight: 700;
++}
