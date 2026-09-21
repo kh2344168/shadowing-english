@@ -83,7 +83,9 @@ export class RecordingRepository {
     }, blob);
 
     if (remote) {
-      await this.trackingApi.trackEvent({
+      // The recording itself is already persisted remotely at this point. Analytics must
+      // not add another network round-trip to the student's "saving" pause between reps.
+      void this.trackingApi.trackEvent({
         studentId: meta.studentId,
         studentName: meta.studentId,
         groupId: meta.groupId || '',

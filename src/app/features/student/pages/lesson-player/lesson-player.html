@@ -3,8 +3,20 @@
   class="fixed h-px w-px opacity-0 pointer-events-none"
   [src]="mediaUrl"
   preload="metadata"
+  crossorigin="use-credentials"
   playsinline
+  (loadedmetadata)="onMediaMetadataLoaded()"
+  (error)="onMediaLoadError()"
 ></video>
+
+<section
+  *ngIf="state === 'loading' && !lesson"
+  class="student-loading mx-auto my-8 max-w-4xl"
+  role="status"
+  dir="rtl"
+>
+  بنجهز الشادوينج...
+</section>
 
 <section
   *ngIf="state === 'error'"

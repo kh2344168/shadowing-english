@@ -30,7 +30,6 @@ import {
   LessonSegment,
   getLessonActivities,
 } from '../../../lessons/data-access/lesson.models';
-import { LessonRepository } from '../../../lessons/data-access/lesson.repository';
 import { StageCompletionCardComponent, type StageCompletionMetric, type StageCompletionInsightSection } from '../../components/stage-completion-card/stage-completion-card.component';
 import { StudentCourseFacade } from '../../data-access/student-course.facade';
 import { StudentKnowledgeBankService } from '../../data-access/student-knowledge-bank.service';
@@ -163,7 +162,6 @@ export class StudentLessonStagePage implements OnInit, OnDestroy {
     private courseFacade: StudentCourseFacade,
     private knowledgeBank: StudentKnowledgeBankService,
     private learningRepository: StudentLearningRepository,
-    private lessonRepository: LessonRepository,
     private contentService: StudentLessonContentService,
     private lessonAiApi: LessonAiApiService,
     private trackingApi: StudentTrackingApiService,
@@ -185,7 +183,6 @@ export class StudentLessonStagePage implements OnInit, OnDestroy {
     if (this.vocabularyAnimationTimerId !== null) {
       window.clearTimeout(this.vocabularyAnimationTimerId);
     }
-    if (this.mediaUrl) URL.revokeObjectURL(this.mediaUrl);
   }
 
   private async loadCurrentStage(): Promise<void> {
@@ -239,9 +236,8 @@ export class StudentLessonStagePage implements OnInit, OnDestroy {
     }
 
     if (stage.activityType === 'listen-write') {
-      const mediaBlob = await this.lessonRepository.getMediaBlob(this.lessonView.lesson.id);
-      if (loadSequence !== this.loadSequence) return;
-      if (mediaBlob) this.mediaUrl = URL.createObjectURL(mediaBlob);
+      this.mediaUrl = this.lessonView.lesson.mediaUrl?.trim() ||
+        `/api/lessons/${encodeURIComponent(this.lessonView.lesson.id)}/media`;
     }
 
     if (stage.activityType === 'quiz') {
@@ -1585,7 +1581,6 @@ export class StudentLessonStagePage implements OnInit, OnDestroy {
 
   private resetStageUi(): void {
     this.stopDictationAudio();
-    if (this.mediaUrl) URL.revokeObjectURL(this.mediaUrl);
     this.lessonView = null;
     this.vocabulary = [];
     this.quizQuestions = [];

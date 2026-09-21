@@ -41,7 +41,6 @@ public sealed class LessonsController(LessonService lessonService) : ControllerB
     }
 
     [HttpGet("{id}/media")]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> GetMedia(
         string id,
         CancellationToken cancellationToken)
@@ -55,7 +54,20 @@ public sealed class LessonsController(LessonService lessonService) : ControllerB
             return NotFound(new { message = "Lesson media was not found." });
         }
 
-        return File(media.Data, media.MediaType);
+        // The lesson DTO emits a versioned media URL based on UpdatedAtUtc. Versioned
+        // requests are safe to keep in the student's private browser cache; legacy
+        // unversioned callers remain no-store so an edited lesson can never serve stale
+        // media accidentally.
+        if (!string.IsNullOrWhiteSpace(Request.Query["v"]))
+        {
+            Response.Headers.CacheControl = "private,max-age=86400,immutable";
+        }
+        else
+        {
+            Response.Headers.CacheControl = "no-store";
+        }
+
+        return File(media.Data, media.MediaType, enableRangeProcessing: true);
     }
 
     [Authorize(Roles = "admin")]

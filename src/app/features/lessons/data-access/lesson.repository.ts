@@ -77,12 +77,11 @@ export class LessonRepository {
 
     const elapsed = this.diagnostics.start('Lessons', 'initialize-from-backend');
     this.initializationPromise = (async () => {
-      try {
-        // Purge media cached by older builds. Recordings use different keys and stay intact.
-        await this.indexedDb.deleteBlobsByPrefix('lesson-media-');
-      } catch (error) {
-        console.warn('[Lessons] Old local lesson media cache could not be cleared.', error);
-      }
+      // Old lesson-media blobs are not used by the current app. Cleanup is maintenance
+      // work and must not delay the first lessons API request on every fresh session.
+      void this.indexedDb.deleteBlobsByPrefix('lesson-media-').catch((error) =>
+        console.warn('[Lessons] Old local lesson media cache could not be cleared.', error),
+      );
 
       try {
         const remoteLessons = await firstValueFrom(this.lessonApi.getAll());

@@ -41,11 +41,21 @@ export class StudentCourseFacade {
   async initialize(forceRefresh = false): Promise<StudentCourseView> {
     const elapsed = this.diagnostics.start('StudentCourse', 'initialize', { forceRefresh, studentId: this.studentId });
     const cacheIsFresh = Date.now() - this.lastInitializedAt < this.refreshWindowMs;
-    if (!forceRefresh && cacheIsFresh) {
+    if (!forceRefresh && this.lastInitializedAt > 0) {
       const cached = this.getCourse();
+      if (!cacheIsFresh && !this.initializePromise) {
+        this.diagnostics.info('StudentCourse', 'initialize:stale-cache-background-refresh', {
+          studentId: this.studentId,
+          ageMs: Date.now() - this.lastInitializedAt,
+          lessons: cached.totalLessons,
+        });
+        this.initializePromise = this.refreshPublishedCourse().finally(() => {
+          this.initializePromise = null;
+        });
+      }
       this.diagnostics.success('StudentCourse', 'initialize', elapsed(), {
         studentId: this.studentId,
-        source: 'memory-cache',
+        source: cacheIsFresh ? 'memory-cache' : 'stale-memory-cache',
         lessons: cached.totalLessons,
         progressPercent: cached.progressPercent,
       });
@@ -366,8 +376,6 @@ export class StudentCourseFacade {
       authGroupId: this.auth.currentUser?.groupId || '',
     });
 
-    await this.lessonRepository.initializeFromDatabase();
-
     const authUser = this.auth.currentUser;
     const authGroupId = authUser?.role === 'student' ? (authUser.groupId || '') : '';
     const authGroupName = authUser?.role === 'student' ? (authUser.groupName || authGroupId) : '';
@@ -402,10 +410,12 @@ export class StudentCourseFacade {
     if (group && student) {
       // Student reads the server-published snapshot. Do not seed a missing backend
       // publication from the student's local cache; publishing belongs to admin/teacher.
-      const refreshedGroup = await this.groupCurriculumRepository.refreshPublishedForGroup(
-        group.id,
-        false,
-      );
+      // Lesson metadata and the published curriculum are independent reads, so start
+      // them together instead of paying two backend round-trips serially.
+      const [, refreshedGroup] = await Promise.all([
+        this.lessonRepository.initializeFromDatabase(),
+        this.groupCurriculumRepository.refreshPublishedForGroup(group.id, false),
+      ]);
       const publishedGroup = refreshedGroup || this.groupRepository.getById(effectiveGroupId) || group;
       const publishedSlotIds = publishedGroup.publishedCurriculum.weeks.flatMap((week) =>
         week.days.flatMap((day) => day.lessonSlots.map((slot) => slot.lessonId)),
@@ -439,25 +449,17 @@ export class StudentCourseFacade {
         correlationId: `course-loaded-${this.studentId}-${Date.now()}`,
       });
 
-      await this.learningRepository.hydrateFromBackend(
-        this.studentId,
-        publishedGroup.id,
-        student.name,
-        publishedGroup.name,
-      );
-
-      // Repetition progress also comes from SQL first so a second device sees the same
-      // shadowing completion before the course view and knowledge bank are built.
-      try {
-        const remoteProgress = await firstValueFrom(
-          this.progressApi.getStudentProgress(this.studentId),
-        );
-        this.studentRepository.applyRemoteProgress(
-          remoteProgress.filter((item) => item.groupId === publishedGroup.id),
-        );
-      } catch {
-        // Keep the local cache when the backend is temporarily unavailable.
-      }
+      // Learning-state and repetition progress are independent reads. Running them in
+      // parallel removes another full network wait from the student's critical path.
+      await Promise.all([
+        this.learningRepository.hydrateFromBackend(
+          this.studentId,
+          publishedGroup.id,
+          student.name,
+          publishedGroup.name,
+        ),
+        this.loadRemoteProgress(publishedGroup.id),
+      ]);
 
       const courseRows: {
         curriculumSlotId: string;
@@ -501,40 +503,17 @@ export class StudentCourseFacade {
         }
       }
 
-      // Ensure newly published slots exist in SQL without erasing progress already loaded
-      // from the backend. This also updates active/inactive rows for the student's group.
-      try {
-        const synced = await firstValueFrom(
-          this.progressApi.syncStudentCourse({
-            studentId: this.studentId,
-            studentName: student.name,
-            groupId: publishedGroup.id,
-            groupName: publishedGroup.name,
-            lessons: courseRows,
-          }),
-        );
-        this.studentRepository.applyRemoteProgress(synced);
-        void this.trackingApi.trackEvent({
-          studentId: this.studentId,
-          studentName: student.name,
-          groupId: publishedGroup.id,
-          groupName: publishedGroup.name,
-          cefrLevel: this.auth.currentUser?.cefrLevel || 'A1',
-          lessonId: '',
-          lessonTitle: '',
-          curriculumSlotId: '',
-          stageId: '',
-          eventType: 'progress_synced',
-          status: 'success',
-          detailsJson: JSON.stringify({ rows: synced.length }),
-          occurredAtUtc: new Date().toISOString(),
-          correlationId: `progress-synced-${this.studentId}-${Date.now()}`,
-        });
-      } catch (error) {
-        this.diagnostics.error('StudentCourse', 'progress-sync:error', error, { studentId: this.studentId, groupId: publishedGroup.id });
-        // Learning remains usable offline and will retry on the next initialize.
-      }
+      // The GET above already provided the progress needed to render. Creating any new
+      // SQL rows is maintenance work, so do it after the UI is allowed to become usable.
+      void this.syncCourseProgressInBackground(
+        publishedGroup.id,
+        publishedGroup.name,
+        student.name,
+        courseRows,
+      );
     } else {
+      // Keep lesson metadata warm even when the group relationship is temporarily missing.
+      await this.lessonRepository.initializeFromDatabase();
       this.diagnostics.warn('StudentCourse', 'refresh-published-course:no-group', {
         studentId: this.studentId,
         authGroupId,
@@ -549,5 +528,90 @@ export class StudentCourseFacade {
       renderedLessons: course.totalLessons,
       renderedWeeks: course.weeks.length,
     });
+  }
+
+  private async loadRemoteProgress(groupId: string): Promise<void> {
+    const elapsed = this.diagnostics.start('StudentCourse', 'load-remote-progress', {
+      studentId: this.studentId,
+      groupId,
+    });
+    try {
+      const remoteProgress = await firstValueFrom(
+        this.progressApi.getStudentProgress(this.studentId),
+      );
+      const groupRows = remoteProgress.filter((item) => item.groupId === groupId);
+      this.studentRepository.applyRemoteProgress(groupRows);
+      this.diagnostics.success('StudentCourse', 'load-remote-progress', elapsed(), {
+        studentId: this.studentId,
+        groupId,
+        rows: groupRows.length,
+      });
+    } catch (error) {
+      this.diagnostics.error('StudentCourse', 'load-remote-progress:error', error, {
+        studentId: this.studentId,
+        groupId,
+        durationMs: elapsed(),
+      });
+      // Keep the local cache when the backend is temporarily unavailable.
+    }
+  }
+
+  private async syncCourseProgressInBackground(
+    groupId: string,
+    groupName: string,
+    studentName: string,
+    lessons: {
+      curriculumSlotId: string;
+      lessonId: string;
+      lessonTitle: string;
+      completedRepetitions: number;
+      requiredRepetitions: number;
+      recordingCount: number;
+    }[],
+  ): Promise<void> {
+    const elapsed = this.diagnostics.start('StudentCourse', 'progress-sync-background', {
+      studentId: this.studentId,
+      groupId,
+      lessonCount: lessons.length,
+    });
+    try {
+      const synced = await firstValueFrom(
+        this.progressApi.syncStudentCourse({
+          studentId: this.studentId,
+          studentName,
+          groupId,
+          groupName,
+          lessons,
+        }),
+      );
+      this.studentRepository.applyRemoteProgress(synced);
+      this.diagnostics.success('StudentCourse', 'progress-sync-background', elapsed(), {
+        studentId: this.studentId,
+        groupId,
+        rows: synced.length,
+      });
+      void this.trackingApi.trackEvent({
+        studentId: this.studentId,
+        studentName,
+        groupId,
+        groupName,
+        cefrLevel: this.auth.currentUser?.cefrLevel || 'A1',
+        lessonId: '',
+        lessonTitle: '',
+        curriculumSlotId: '',
+        stageId: '',
+        eventType: 'progress_synced',
+        status: 'success',
+        detailsJson: JSON.stringify({ rows: synced.length }),
+        occurredAtUtc: new Date().toISOString(),
+        correlationId: `progress-synced-${this.studentId}-${Date.now()}`,
+      });
+    } catch (error) {
+      this.diagnostics.error('StudentCourse', 'progress-sync-background:error', error, {
+        studentId: this.studentId,
+        groupId,
+        durationMs: elapsed(),
+      });
+    }
   }
 }

@@ -23,9 +23,11 @@ import {
   faVolumeOff,
 } from '@fortawesome/free-solid-svg-icons';
 import { firstValueFrom, timeout } from 'rxjs';
+import { API_BASE_URL } from '../../../../core/api/api.config';
 import { ProgressApiService } from '../../../../core/api/progress-api.service';
 import { StudentTrackingApiService } from '../../../../core/api/student-tracking-api.service';
 import { AuthService } from '../../../../core/auth/services/auth.service';
+import { AppDiagnosticsService } from '../../../../core/diagnostics/app-diagnostics.service';
 import {
   CourseLesson,
   LessonActivityType,
@@ -150,7 +152,7 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   sentenceDrawerOpen = false;
   settingsDrawerOpen = false;
   autoAdvanceEnabled = true;
-  studentTurnTimeLimitEnabled = false;
+  studentTurnTimeLimitEnabled = true;
   countdownPauseSeconds = 3;
   isCompletionModalOpen = false;
   showMicPermissionBanner = false;
@@ -168,7 +170,8 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   private shadowingRepetitionScores: number[] = [];
   private sessionTrainingStartedAtMs = 0;
 
-  private mediaBlob: Blob | null = null;
+  mediaReady = false;
+  private mediaLoadStartedAt = 0;
   private micStream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private mixedRecordingStream: MediaStream | null = null;
@@ -243,6 +246,7 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
     private courseFacade: StudentCourseFacade,
     private progressApi: ProgressApiService,
     private trackingApi: StudentTrackingApiService,
+    private diagnostics: AppDiagnosticsService,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -253,12 +257,22 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   async ngOnInit(): Promise<void> {
     this.restorePlayerSettings();
     this.teacherPreview = Boolean(this.route.snapshot.data['teacherPreview']);
+    const lessonId = this.route.snapshot.paramMap.get('lessonId') || '';
+    const pageElapsed = this.diagnostics.start('StudentShadowing', 'page-init', {
+      lessonId,
+      teacherPreview: this.teacherPreview,
+    });
     if (!this.teacherPreview) {
+      const courseElapsed = this.diagnostics.start('StudentShadowing', 'course-init', {
+        lessonId,
+      });
       await this.courseFacade.initialize();
+      this.diagnostics.success('StudentShadowing', 'course-init', courseElapsed(), {
+        lessonId,
+      });
     }
     this.previewReturnUrl =
       this.route.snapshot.queryParamMap.get('returnUrl') || '';
-    const lessonId = this.route.snapshot.paramMap.get('lessonId') || '';
     this.activeStageId =
       this.route.snapshot.paramMap.get('stageId') || 'shadowing';
     this.curriculumSlotId =
@@ -312,17 +326,20 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
       );
     }
 
-    this.mediaBlob = await this.lessonRepository.getMediaBlob(this.lesson.id);
-
-    if (!this.mediaBlob) {
-      this.state = 'error';
-      this.error = 'ملف الدرس غير موجود على السيرفر. اطلب من الأدمن إعادة رفع الوسائط.';
-      return;
-    }
-
-    this.mediaUrl = URL.createObjectURL(this.mediaBlob);
+    this.mediaLoadStartedAt = performance.now();
+    this.mediaUrl = this.resolveMediaUrl(
+      this.lesson.mediaUrl?.trim() ||
+        `/api/lessons/${encodeURIComponent(this.lesson.id)}/media`,
+    );
     this.currentSegment = this.lesson.segments[0] || null;
     this.state = 'ready';
+    this.renderView();
+    this.diagnostics.success('StudentShadowing', 'page-init', pageElapsed(), {
+      lessonId: this.lesson.id,
+      stageId: this.activeStageId,
+      segments: this.lesson.segments.length,
+      mediaMode: 'direct-url',
+    });
     if (!this.teacherPreview) {
       void this.trackingApi.trackEvent({
         studentId: this.studentId,
@@ -346,9 +363,13 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
       title: this.lesson.title,
       segments: this.lesson.segments.length,
       requiredRepetitions: this.lesson.requiredRepetitions,
-      mediaBlobSize: this.mediaBlob.size,
+      mediaMode: 'direct-url',
     });
-    await this.loadRecordings();
+    void this.loadRecordings().catch((error) =>
+      this.diagnostics.error('StudentShadowing', 'recordings-load:error', error, {
+        lessonId: this.lesson?.id || lessonId,
+      }),
+    );
     if (!this.teacherPreview) {
       const lessonView = this.courseFacade.getLesson(
         this.lesson.id,
@@ -373,7 +394,6 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
     this.stopVisualizer();
     this.cleanupRecordingGraph();
     this.stopTracks();
-    if (this.mediaUrl) URL.revokeObjectURL(this.mediaUrl);
     for (const recording of this.recordings) {
       if (recording.url) URL.revokeObjectURL(recording.url);
     }
@@ -438,6 +458,7 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   }
 
   get primaryActionLabel(): string {
+    if (!this.mediaReady) return 'جاري تجهيز الصوت...';
     if (this.state === 'paused') return 'كمّل نفس التسجيل';
     if (this.state === 'teacher' || this.state === 'student') return 'إيقاف مؤقت';
     if (this.state === 'saving') return 'جاري الحفظ...';
@@ -504,6 +525,7 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   get canStart(): boolean {
     return (
       !!this.lesson &&
+      this.mediaReady &&
       !this.isRunning &&
       this.lesson.segments.length > 0 &&
       (this.remainingRepetitions > 0 || this.completedRepetitions > 0)
@@ -511,6 +533,7 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   }
 
   get statusLabel(): string {
+    if (!this.mediaReady) return 'جاري تجهيز صوت الدرس في الخلفية...';
     if (this.manualPreviewActive) return `تشغيل الجملة الحالية بسرعة ${this.teacherPlaybackRateLabel}.`;
     if (this.state === 'teacher') return 'المدرس يتكلم الآن. بعد انتهاء الجملة، يبدأ تسجيل صوتك تلقائيًا.';
     if (this.state === 'student') {
@@ -1950,8 +1973,10 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
     await this.recordingRepository.saveRecording(meta, blob);
     this.debug('recording-saved', { recordingId: meta.id, blobSize: blob.size, duration: meta.durationLabel });
     this.syncProgressFallback(meta, completedBeforeSave);
-    await this.syncProgressToBackend();
-    await this.loadRecordings();
+    await Promise.all([
+      this.syncProgressToBackend(),
+      this.loadRecordings(),
+    ]);
     this.debug('recordings-reloaded', { count: this.recordings.length });
 
     const repetitionScore = this.currentRepetitionSegmentScores.length
@@ -2354,6 +2379,12 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
   private async loadRecordings(): Promise<void> {
     if (!this.lesson || !this.studentId) return;
 
+    const elapsed = this.diagnostics.start('StudentShadowing', 'recordings-load', {
+      studentId: this.studentId,
+      lessonId: this.lesson.id,
+      curriculumSlotId: this.curriculumSlotId,
+    });
+
     for (const recording of this.recordings) {
       if (recording.url) URL.revokeObjectURL(recording.url);
     }
@@ -2364,19 +2395,80 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
       this.curriculumSlotId,
       this.activeGroupId,
     );
-    const views: RecordingView[] = [];
-
-    for (const meta of metas) {
-      const blob = await this.recordingRepository.getRecordingBlob(meta.id);
-      views.push({
-        meta,
-        url: blob ? URL.createObjectURL(blob) : null,
-      });
-    }
+    const views: RecordingView[] = await Promise.all(
+      metas.map(async (meta) => {
+        const blob = await this.recordingRepository.getRecordingBlob(meta.id);
+        return {
+          meta,
+          url: blob ? URL.createObjectURL(blob) : null,
+        };
+      }),
+    );
 
     this.recordings = views;
     this.renderView();
     this.debug('load-recordings', { count: this.recordings.length });
+    this.diagnostics.success('StudentShadowing', 'recordings-load', elapsed(), {
+      studentId: this.studentId,
+      lessonId: this.lesson.id,
+      count: this.recordings.length,
+    });
+  }
+
+  private resolveMediaUrl(rawUrl: string): string {
+    const value = rawUrl.trim();
+    if (!value || /^https?:\/\//i.test(value) || value.startsWith('blob:')) {
+      return value;
+    }
+
+    // Production serves /api from the same origin. Local development may point
+    // API_BASE_URL directly at http://localhost:5017/api; in that case keep the
+    // media request on the backend origin instead of sending it to Angular :4200.
+    if (/^https?:\/\//i.test(API_BASE_URL)) {
+      const apiOrigin = new URL(API_BASE_URL).origin;
+      if (value.startsWith('/')) return `${apiOrigin}${value}`;
+      return `${API_BASE_URL.replace(/\/$/, '')}/${value.replace(/^\//, '')}`;
+    }
+
+    return value;
+  }
+
+  onMediaMetadataLoaded(): void {
+    if (this.mediaReady) return;
+
+    this.mediaReady = true;
+    const media = this.mediaPlayer?.nativeElement;
+    this.diagnostics.success(
+      'StudentShadowing',
+      'media-metadata-ready',
+      Math.round(performance.now() - this.mediaLoadStartedAt),
+      {
+        lessonId: this.lesson?.id || '',
+        durationSeconds: Number.isFinite(media?.duration)
+          ? Math.round((media?.duration || 0) * 100) / 100
+          : null,
+        readyState: media?.readyState ?? null,
+      },
+    );
+    this.renderView();
+  }
+
+  onMediaLoadError(): void {
+    const media = this.mediaPlayer?.nativeElement;
+    this.diagnostics.error(
+      'StudentShadowing',
+      'media-load:error',
+      media?.error || new Error('Media load failed'),
+      {
+        lessonId: this.lesson?.id || '',
+        durationMs: Math.round(performance.now() - this.mediaLoadStartedAt),
+        networkState: media?.networkState ?? null,
+        readyState: media?.readyState ?? null,
+      },
+    );
+    this.state = 'error';
+    this.error = 'ملف الدرس غير موجود أو تعذر تحميله من السيرفر. اطلب من الأدمن إعادة رفع الوسائط.';
+    this.renderView();
   }
 
   private stopTracks(): void {
@@ -2523,8 +2615,13 @@ export class StudentLessonPlayerPage implements OnInit, AfterViewInit, OnDestroy
       8,
       3.5,
     );
+    const storedStudentTurnTimeLimit = localStorage.getItem(
+      this.studentTurnTimeLimitStorageKey,
+    );
     this.studentTurnTimeLimitEnabled =
-      localStorage.getItem(this.studentTurnTimeLimitStorageKey) === 'true';
+      storedStudentTurnTimeLimit === null
+        ? true
+        : storedStudentTurnTimeLimit === 'true';
 
     const storedMode = localStorage.getItem(this.audioCaptureModeStorageKey);
     if (storedMode === 'auto' || storedMode === 'headset' || storedMode === 'phone') {

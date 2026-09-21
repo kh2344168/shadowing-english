@@ -1,7 +1,6 @@
 import { CommonModule } from '@angular/common';
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, signal } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { LessonRepository } from '../../../lessons/data-access/lesson.repository';
 import { StudentCourseFacade } from '../../data-access/student-course.facade';
 import { StudentReviewView } from '../../data-access/student-learning.models';
 
@@ -12,7 +11,7 @@ import { StudentReviewView } from '../../data-access/student-learning.models';
   templateUrl: './student-review.page.html',
   styleUrl: './student-review.page.scss',
 })
-export class StudentReviewPage implements OnInit, OnDestroy {
+export class StudentReviewPage implements OnInit {
   reviews: StudentReviewView[] = [];
   activeReview: StudentReviewView | null = null;
   activeSegmentIndex = 0;
@@ -25,7 +24,6 @@ export class StudentReviewPage implements OnInit, OnDestroy {
   constructor(
     private route: ActivatedRoute,
     private courseFacade: StudentCourseFacade,
-    private lessonRepository: LessonRepository,
     private cdr: ChangeDetectorRef,
   ) {}
 
@@ -39,15 +37,11 @@ export class StudentReviewPage implements OnInit, OnDestroy {
       this.reviews[0] ||
       null;
     if (this.activeReview) {
-      const mediaBlob = await this.lessonRepository.getMediaBlob(this.activeReview.lessonId);
-      if (mediaBlob) this.mediaUrl = URL.createObjectURL(mediaBlob);
+      this.mediaUrl = this.activeReview.lessonView.lesson.mediaUrl?.trim() ||
+        `/api/lessons/${encodeURIComponent(this.activeReview.lessonId)}/media`;
     }
     this.loading.set(false);
     this.cdr.detectChanges();
-  }
-
-  ngOnDestroy(): void {
-    if (this.mediaUrl) URL.revokeObjectURL(this.mediaUrl);
   }
 
   get activeSegment() {
